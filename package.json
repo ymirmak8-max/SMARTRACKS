@@ -1,0 +1,17 @@
+{
+  "name": "smartrack",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "test": "npm --prefix server test",
+    "lint": "npm --prefix client run lint",
+    "migrate": "npm --prefix server run migrate"
+  }
+}

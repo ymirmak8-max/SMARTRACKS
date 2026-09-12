@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Environment files (keep secret!)
+.env
+client/.env
+server/.env
+
+# Build output
+client/dist/
+server/dist/
+client/test-results/
+client/playwright-report/
+backups/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local generation and inspection artifacts
+.pptx-tools/
+.tools/
+docx_extract/
+portfolio-cover-check.png
+*.pptx
+~$*.docx
+
+# Hosting
+.vercel/
