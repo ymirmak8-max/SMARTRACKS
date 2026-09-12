@@ -296,6 +296,29 @@ export const AccessibleTable = ({
   );
 };
 
+export const AccountIdentityCard = ({ initials, name, email, roleLabel, details = [], photoEditor = null }) => (
+  <div className="card account-identity-card" style={{ marginBottom: '0.875rem' }}>
+    <div className="account-identity-header">
+      {photoEditor || <div className="account-identity-avatar" aria-hidden="true">{initials}</div>}
+      <div>
+        <div className="account-identity-name">{name}</div>
+        <div className="account-identity-email">{email}</div>
+        {roleLabel && <span className="badge badge-primary account-identity-role">{roleLabel}</span>}
+      </div>
+    </div>
+    {details.length > 0 && (
+      <dl className="account-details-list">
+        {details.map(item => (
+          <div key={item.label} className="account-details-row">
+            <dt>{item.label}</dt>
+            <dd>{item.value || 'Not set'}</dd>
+          </div>
+        ))}
+      </dl>
+    )}
+  </div>
+);
+
 export const safePercent = (value, total) => {
   const numericValue = Number(value);
   const numericTotal = Number(total);

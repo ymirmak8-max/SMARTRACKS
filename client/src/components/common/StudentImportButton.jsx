@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { importStudents } from '../../api/users';
+import { sanitizePhone } from '../../utils/phone';
 
 const parseCsvLine = (line, delimiter) => {
   const cells = [];
@@ -72,9 +73,13 @@ const parseCsv = (text) => {
       + 'Use headers: first_name,last_name,email,phone,course,school.',
     );
   }
-  return lines.slice(1).map(line => Object.fromEntries(
-    parseCsvLine(line, delimiter).map((value, index) => [headers[index], value]),
-  ));
+  return lines.slice(1).map(line => {
+    const row = Object.fromEntries(
+      parseCsvLine(line, delimiter).map((value, index) => [headers[index], value]),
+    );
+    if (row.phone) row.phone = sanitizePhone(row.phone);
+    return row;
+  });
 };
 
 const StudentImportButton = ({ onImported }) => {

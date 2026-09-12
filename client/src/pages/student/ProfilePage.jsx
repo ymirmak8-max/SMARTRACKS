@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { getProfile, updateProfile, changePassword } from '../../api/profile';
 import NotificationPreferences from '../../components/common/NotificationPreferences';
 import SkeletonPage from '../../components/common/Skeleton';
+import { MAX_PHONE_DIGITS, sanitizePhone } from '../../utils/phone';
+import ProfileAvatar from '../../components/common/ProfileAvatar';
 
 const ROLE_LABELS = {
   student: 'Student',
@@ -114,12 +116,7 @@ const ProfilePage = () => {
       {/* Profile Header Card */}
       <div className="card" style={{ marginBottom: '0.875rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{
-            width: '64px', height: '64px', borderRadius: '50%',
-            background: 'var(--primary)', color: 'var(--on-primary)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.5rem', fontWeight: 700, flexShrink: 0,
-          }}>{initials}</div>
+          <ProfileAvatar initials={initials} onToast={showToast} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
               {profile.first_name} {profile.last_name}
@@ -183,9 +180,10 @@ const ProfilePage = () => {
             </div>
             <div className="form-group">
               <label>Phone</label>
-              <input type="text" value={form.phone}
-                onChange={e => setForm({ ...form, phone: e.target.value })}
-                placeholder="e.g. 0917 123 4567" />
+              <input type="tel" inputMode="numeric" autoComplete="tel" maxLength={MAX_PHONE_DIGITS}
+                value={form.phone}
+                onChange={e => setForm({ ...form, phone: sanitizePhone(e.target.value) })}
+                placeholder="09XXXXXXXXX" />
             </div>
             <div className="form-group">
               <label>Course</label>
@@ -218,6 +216,10 @@ const ProfilePage = () => {
           <div className="card-title">Additional details</div>
           {[
             { label: 'Phone', value: profile.phone || 'Not set' },
+            { label: 'Company', value: profile.company_name || 'Not assigned' },
+            { label: 'Company address', value: profile.company_address || 'Not set' },
+            { label: 'Course', value: profile.course || 'Not set' },
+            { label: 'School', value: profile.school || 'Not set' },
             { label: 'Member since', value: formatDate(profile.created_at) },
           ].map(item => (
             <div key={item.label} style={{

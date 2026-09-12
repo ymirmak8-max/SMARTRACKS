@@ -10,16 +10,16 @@ export const getStudentsForSupervisor = async (req, res) => {
       SELECT 
   u.id, u.first_name, u.last_name, u.email, u.course, u.school,
   d.id AS deployment_id, d.required_hours, d.start_date, d.end_date,
-  c.name AS company_name,
+  c.name AS company_name, c.address AS company_address,
         COALESCE(SUM(tr.total_hours), 0) AS hours_rendered,
         (SELECT json_agg(e.*) FROM evaluations e WHERE e.deployment_id = d.id) AS evaluations
       FROM deployments d
       JOIN users u ON d.student_id = u.id
-      JOIN companies c ON d.company_id = c.id
+      LEFT JOIN companies c ON d.company_id = c.id
       LEFT JOIN time_records tr ON tr.student_id = u.id AND tr.is_valid = true
       WHERE d.supervisor_id = $1 AND d.status = 'active'
-      GROUP BY u.id, u.first_name, u.last_name, u.email,
-               d.id, d.required_hours, d.start_date, d.end_date, c.name
+      GROUP BY u.id, u.first_name, u.last_name, u.email, u.course, u.school,
+               d.id, d.required_hours, d.start_date, d.end_date, c.name, c.address
       ORDER BY u.last_name ASC
     `, [req.user.id]);
 

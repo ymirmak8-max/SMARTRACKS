@@ -252,7 +252,7 @@ const SupervisorLiveMap = () => {
       <div className="card">
         <div className="card-title">Recently reporting students</div>
         {!locations.length ? (
-          <p className="live-map-empty">No assigned students have reported a location in the last five minutes.</p>
+          <p className="live-map-empty">No assigned students are timed in or have sent a location recently. Students appear here after they time in.</p>
         ) : locations.map(location => {
           const anomaly = Boolean(location.anomaly_flag);
           const clockedIn = Boolean(location.is_clocked_in);

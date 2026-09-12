@@ -14,6 +14,8 @@ import { writeAuditLog } from '../utils/audit.js';
 import jwt from 'jsonwebtoken';
 import { buildOtpAuthUrl, createMfaSecret, decryptMfaSecret, encryptMfaSecret, verifyTotp } from '../utils/mfa.js';
 import { isFlagEnabled } from '../utils/flags.js';
+import { sanitizePhone } from '../utils/phone.js';
+import { resolveFrontendUrl, revokeUserSessions } from '../utils/authSession.js';
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -132,7 +134,7 @@ if (blockedDomains.includes(emailDomain))
       `INSERT INTO users (first_name, last_name, email, password_hash, role, phone, course, school, is_active, approval_status, must_change_password)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, 'pending', false)
        RETURNING id, first_name, last_name, email, role, approval_status`,
-      [firstName.trim(), lastName.trim(), normalizedEmail, passwordHash, 'student', phone || null, course || null, school || null]
+      [firstName.trim(), lastName.trim(), normalizedEmail, passwordHash, 'student', sanitizePhone(phone), course || null, school || null]
     );
 
     await writeAuditLog({ actorId: result.rows[0].id, action: 'auth.register', entityType: 'user',
@@ -237,26 +239,32 @@ export const forgotPassword = async (req, res) => {
       await writeAuditLog({ actorId: user.id, action: 'password_reset.request', entityType: 'user',
         entityId: user.id, req });
 
-      const frontendUrl = process.env.FRONTEND_URL
-        || process.env.CLIENT_URL
-        || (process.env.RENDER_EXTERNAL_HOSTNAME ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` : null);
-      if (frontendUrl) {
+      const frontendUrl = resolveFrontendUrl(req);
+      const resetUrl = frontendUrl ? `${frontendUrl}/reset-password?token=${token}` : null;
+      let emailSent = false;
+      if (resetUrl) {
         try {
-          await sendPasswordResetEmail({
-            to: user.email,
-            resetUrl: `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${token}`,
-          });
+          await sendPasswordResetEmail({ to: user.email, resetUrl });
+          emailSent = true;
         } catch (emailError) {
           console.error('Password reset email error:', emailError.message);
         }
       } else {
         console.error('Password reset email error: FRONTEND_URL or CLIENT_URL is not configured.');
       }
+
+      const payload = {
+        message: 'If an account exists with this email, reset instructions have been sent.',
+        emailSent,
+      };
+      if (!emailSent && process.env.NODE_ENV !== 'production' && resetUrl)
+        payload.resetUrl = resetUrl;
+      return res.status(200).json(payload);
     }
 
-    // Always return success (prevents email enumeration)
     return res.status(200).json({
       message: 'If an account exists with this email, reset instructions have been sent.',
+      emailSent: false,
     });
   } catch (err) {
     console.error('Forgot password error:', err);
@@ -341,7 +349,6 @@ export const acceptPrivacyNotice = async (req, res) => {
 
 // POST /api/auth/reset-password
 export const resetPassword = async (req, res) => {
-  const client = await pool.connect();
   try {
     const { token, password } = req.body;
     if (!token || !password)
@@ -350,33 +357,27 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 8 characters.' });
 
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    await client.query('BEGIN');
-    const result = await client.query(
+    const result = await pool.query(
       `DELETE FROM password_reset_tokens
        WHERE token_hash = $1 AND expires_at > NOW()
        RETURNING user_id`,
       [tokenHash]
     );
-    if (result.rows.length === 0) {
-      await client.query('ROLLBACK');
+    if (result.rows.length === 0)
       return res.status(400).json({ message: 'Reset link is invalid or expired.' });
-    }
 
+    const userId = result.rows[0].user_id;
     const passwordHash = await bcrypt.hash(password, 10);
-    await client.query(
-      `UPDATE users SET password_hash = $1, must_change_password = false WHERE id = $2`,
-      [passwordHash, result.rows[0].user_id]
+    await pool.query(
+      `UPDATE users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2`,
+      [passwordHash, userId]
     );
-    await client.query('DELETE FROM refresh_tokens WHERE user_id = $1', [result.rows[0].user_id]);
-    await client.query('COMMIT');
-    await writeAuditLog({ actorId: result.rows[0].user_id, action: 'password_reset.complete', entityType: 'user',
-      entityId: result.rows[0].user_id, req });
+    await revokeUserSessions(userId);
+    await writeAuditLog({ actorId: userId, action: 'password_reset.complete', entityType: 'user',
+      entityId: userId, req });
     return res.status(200).json({ message: 'Password reset successfully.' });
   } catch (err) {
-    await client.query('ROLLBACK');
     console.error('Reset password error:', err);
     return res.status(500).json({ message: 'Failed to reset password.' });
-  } finally {
-    client.release();
   }
 };

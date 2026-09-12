@@ -5,6 +5,7 @@ import { User, LogOut, Sun, Moon, ChevronDown, Mail } from 'lucide-react';
 import VectorIcon from './VectorIcon';
 import { useTheme } from '../../context/ThemeContext';
 import useAuth from '../../hooks/useAuth';
+import { UserAvatar } from './ProfileAvatar';
 
 const PANEL_WIDTH = 260;
 
@@ -129,7 +130,12 @@ const UserMenu = ({ onEditProfile, placement = 'chrome', compact = false }) => {
     >
       <div className="user-menu-panel-head">
         <div className="user-menu-panel-identity">
-          <div className="user-menu-panel-avatar" aria-hidden="true">{initials}</div>
+          <UserAvatar
+            className="user-menu-panel-avatar"
+            src={user?.profilePicture || user?.profile_picture}
+            initials={initials}
+            size={44}
+          />
           <div className="user-menu-panel-copy">
             <div className="user-menu-panel-name">{user?.first_name} {user?.last_name}</div>
             <div className="user-menu-panel-email">
@@ -176,7 +182,12 @@ const UserMenu = ({ onEditProfile, placement = 'chrome', compact = false }) => {
         aria-haspopup="menu"
         aria-label="Open account menu"
       >
-        <span className="user-menu-avatar" aria-hidden="true">{initials}</span>
+        <UserAvatar
+          className="user-menu-avatar"
+          src={user?.profilePicture || user?.profile_picture}
+          initials={initials}
+          size={36}
+        />
         <span className="user-menu-copy">
           <span className="user-menu-name">{user?.first_name} {user?.last_name}</span>
           {placement === 'sidebar' && <span className="user-menu-role">{roleLabel}</span>}

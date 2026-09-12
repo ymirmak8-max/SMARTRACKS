@@ -4,6 +4,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import BrandLogo from '../../components/common/BrandLogo';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import useAuth from '../../hooks/useAuth';
+import { MAX_PHONE_DIGITS, sanitizePhone } from '../../utils/phone';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -19,7 +20,10 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: name === 'phone' ? sanitizePhone(value) : value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -101,9 +105,10 @@ const Register = () => {
             <label htmlFor="register-phone">Phone (optional)</label>
             <input
               id="register-phone"
-              type="tel" name="phone"
+              type="tel" name="phone" inputMode="numeric" autoComplete="tel"
+              maxLength={MAX_PHONE_DIGITS}
               value={form.phone} onChange={handleChange}
-              placeholder="09XX XXX XXXX"
+              placeholder="09XXXXXXXXX"
             />
           </div>
           {/* Public registration creates student accounts only. */}

@@ -65,6 +65,19 @@ const useLocation = (officeLat, officeLng, radiusMeters, onExitPerimeter, isCloc
   }, [onExitPerimeter]);
 
   useEffect(() => {
+    if (!isClockedIn) return undefined;
+    const stable = stablePositionRef.current;
+    if (!stable) return undefined;
+    lastUploadRef.current = Date.now();
+    updateLiveLocation({
+      latitude: stable.latitude,
+      longitude: stable.longitude,
+      accuracy: stable.accuracy,
+    }).catch(() => setError('Live location could not be synced. Retrying automatically.'));
+    return undefined;
+  }, [isClockedIn]);
+
+  useEffect(() => {
     if (!navigator.geolocation) {
       setError('Geolocation not supported.');
       return;

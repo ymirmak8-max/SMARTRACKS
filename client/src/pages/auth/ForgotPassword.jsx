@@ -9,6 +9,8 @@ const ForgotPassword = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [resetUrl, setResetUrl] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
@@ -16,7 +18,9 @@ const ForgotPassword = () => {
     setError('');
     setLoading(true);
     try {
-      await api.post('/auth/forgot-password', { email });
+      const response = await api.post('/auth/forgot-password', { email });
+      setEmailSent(Boolean(response.data.emailSent));
+      setResetUrl(response.data.resetUrl || '');
       setSent(true);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send reset email.');
@@ -49,9 +53,16 @@ const ForgotPassword = () => {
           {sent ? (
             <>
               <div className="auth-alert auth-alert-success">
-                <strong>Check your email.</strong> Reset instructions were sent to {email}.
+                {emailSent
+                  ? <><strong>Check your email.</strong> Reset instructions were sent to {email}.</>
+                  : resetUrl
+                    ? 'Email delivery is not configured here. Use the reset link below.'
+                    : 'If an account exists for this email, follow the reset instructions or ask an administrator to reset the password.'}
               </div>
-              <Link to="/login" className="btn-primary auth-submit">Back to sign in</Link>
+              {resetUrl && (
+                <a href={resetUrl} className="btn-primary auth-submit">Continue to reset password</a>
+              )}
+              <Link to="/login" className={resetUrl ? 'auth-submit' : 'btn-primary auth-submit'}>Back to sign in</Link>
             </>
           ) : (
             <form onSubmit={handleSubmit}>

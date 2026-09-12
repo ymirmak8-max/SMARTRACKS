@@ -6,6 +6,11 @@ dotenv.config();
 
 try {
   await pool.query('SELECT 1 AS ok');
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE SET NULL
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS users_company_id_idx ON users (company_id)');
   const adminCount = await pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin'");
   const count = Number(adminCount.rows[0]?.count) || 0;
   if (count === 0) {

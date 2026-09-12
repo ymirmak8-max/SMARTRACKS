@@ -5,7 +5,7 @@ import UserMenu from './UserMenu';
 
 const SIDEBAR_KEY = 'smartrack:sidebar';
 
-const Sidebar = ({ user, navItems, activeTab, onTabChange, role, onEditProfile }) => {
+const Sidebar = ({ user: _user, navItems, activeTab, onTabChange, role, onEditProfile }) => {
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_KEY) === 'collapsed'; }
     catch { return false; }

@@ -5,6 +5,7 @@ import {
   updateUser,
   toggleUserStatus,
   deleteUser,
+  resetUserPassword,
   bulkUserAction,
   importStudents,
 } from '../controllers/userController.js';
@@ -20,6 +21,7 @@ router.post('/', createUser);
 router.post('/bulk', bulkUserAction);
 router.post('/import-students', importStudents);
 router.put('/:id', updateUser);
+router.post('/:id/reset-password', resetUserPassword);
 router.patch('/:id/status', toggleUserStatus);
 router.delete('/:id', deleteUser);
 

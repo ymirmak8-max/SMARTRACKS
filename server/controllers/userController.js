@@ -3,12 +3,38 @@ import pool from '../config/db.js';
 import { sendAccountStatusEmail } from '../utils/sendEmail.js';
 import { writeAuditLog } from '../utils/audit.js';
 import crypto from 'node:crypto';
+import { sanitizePhone } from '../utils/phone.js';
+import { createTemporaryPassword, revokeUserSessions } from '../utils/authSession.js';
+
+const persistAssignedCompany = async (userId, companyId) => {
+  if (!companyId) return;
+  try {
+    await pool.query('UPDATE users SET company_id = $1, updated_at = NOW() WHERE id = $2', [companyId, userId]);
+  } catch (error) {
+    console.error('Assigned company was not saved. Run server/sql/migration_20260912_user_company.sql.', error.message);
+  }
+};
 
 export const getAllUsers = async (req, res) => {
   try {
     const { role, search, approval_status } = req.query;
     let query = `
-      SELECT id, first_name, last_name, email, role, is_active, approval_status, phone, course, school, created_at
+      SELECT id, first_name, last_name, email, role, is_active, approval_status, phone, course, school, created_at,
+        (
+          SELECT c.name FROM deployments d
+          JOIN companies c ON c.id = d.company_id
+          WHERE d.status = 'active'
+            AND (d.student_id = users.id OR d.supervisor_id = users.id OR d.coordinator_id = users.id)
+          ORDER BY d.start_date DESC NULLS LAST
+          LIMIT 1
+        ) AS company_name,
+        (
+          SELECT d.company_id FROM deployments d
+          WHERE d.status = 'active'
+            AND (d.student_id = users.id OR d.supervisor_id = users.id OR d.coordinator_id = users.id)
+          ORDER BY d.start_date DESC NULLS LAST
+          LIMIT 1
+        ) AS company_id
       FROM users WHERE 1=1
     `;
     const params = [];
@@ -28,7 +54,30 @@ export const getAllUsers = async (req, res) => {
 
     query += ` ORDER BY created_at DESC`;
     const result = await pool.query(query, params);
-    return res.status(200).json({ users: result.rows });
+    const users = result.rows;
+    try {
+      const ids = users.map(user => user.id);
+      if (ids.length) {
+        const homes = await pool.query(
+          `SELECT u.id, u.company_id, c.name AS company_name, c.address AS company_address
+           FROM users u
+           LEFT JOIN companies c ON c.id = u.company_id
+           WHERE u.id = ANY($1::uuid[]) AND u.company_id IS NOT NULL`,
+          [ids]
+        );
+        const byId = Object.fromEntries(homes.rows.map(row => [row.id, row]));
+        users.forEach(user => {
+          const home = byId[user.id];
+          if (!home) return;
+          if (!user.company_name) user.company_name = home.company_name;
+          if (!user.company_id) user.company_id = home.company_id;
+          if (!user.company_address) user.company_address = home.company_address;
+        });
+      }
+    } catch {
+      // users.company_id is added by migration_20260912_user_company.sql
+    }
+    return res.status(200).json({ users });
   } catch (err) {
     console.error('Get users error:', err);
     return res.status(500).json({ message: 'Failed to fetch users.' });
@@ -37,7 +86,7 @@ export const getAllUsers = async (req, res) => {
 
 export const createUser = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, role, phone, course, school } = req.body;
+    const { firstName, lastName, email, password, role, phone, course, school, companyId } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
     const validRoles = ['admin', 'student', 'coordinator', 'supervisor'];
     if (!firstName || !lastName || !normalizedEmail || !password || !role)
@@ -70,10 +119,11 @@ if (blockedDomains.includes(emailDomain))
       `INSERT INTO users (first_name, last_name, email, password_hash, role, phone, course, school, must_change_password, approval_status, is_active)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, 'approved', true)
        RETURNING id, first_name, last_name, email, role, approval_status, is_active`,
-      [firstName.trim(), lastName.trim(), normalizedEmail, passwordHash, role, phone || null,
+      [firstName.trim(), lastName.trim(), normalizedEmail, passwordHash, role, sanitizePhone(phone),
        course || null, school || null]
     );
 
+    await persistAssignedCompany(result.rows[0].id, companyId);
     await writeAuditLog({ actorId: req.user.id, action: 'user.create', entityType: 'user', entityId: result.rows[0].id, details: { role }, req });
     if (role === 'student') {
       const { notifyStudentReady } = await import('../utils/staffNotify.js');
@@ -94,7 +144,7 @@ if (blockedDomains.includes(emailDomain))
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { firstName, lastName, email, role, phone, course, school, password } = req.body;
+    const { firstName, lastName, email, role, phone, course, school, password, companyId } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
     const validRoles = ['admin', 'student', 'coordinator', 'supervisor'];
 
@@ -119,15 +169,15 @@ export const updateUser = async (req, res) => {
     if (password) {
       const passwordHash = await bcrypt.hash(password, 10);
       query = `UPDATE users SET first_name=$1, last_name=$2, email=$3, role=$4, phone=$5, course=$6, school=$7,
-               password_hash=$8, updated_at=NOW()
+               password_hash=$8, must_change_password=true, updated_at=NOW()
                WHERE id=$9 RETURNING id, first_name, last_name, email, role, phone, course, school, is_active`;
-      params = [firstName.trim(), lastName.trim(), normalizedEmail, role, phone?.trim() || null,
+      params = [firstName.trim(), lastName.trim(), normalizedEmail, role, sanitizePhone(phone),
         course?.trim() || null, school?.trim() || null, passwordHash, id];
     } else {
       query = `UPDATE users SET first_name=$1, last_name=$2, email=$3, role=$4, phone=$5, course=$6, school=$7,
                updated_at=NOW()
                WHERE id=$8 RETURNING id, first_name, last_name, email, role, phone, course, school, is_active`;
-      params = [firstName.trim(), lastName.trim(), normalizedEmail, role, phone?.trim() || null,
+      params = [firstName.trim(), lastName.trim(), normalizedEmail, role, sanitizePhone(phone),
         course?.trim() || null, school?.trim() || null, id];
     }
 
@@ -135,12 +185,52 @@ export const updateUser = async (req, res) => {
     if (result.rows.length === 0)
       return res.status(404).json({ message: 'User not found.' });
 
+    await persistAssignedCompany(id, companyId);
+    if (password && id !== req.user.id) await revokeUserSessions(id);
     await writeAuditLog({ actorId: req.user.id, action: 'user.update', entityType: 'user', entityId: id, details: { role }, req });
 
     return res.status(200).json({ user: result.rows[0], message: 'User updated successfully.' });
   } catch (err) {
     console.error('Update user error:', err);
     return res.status(500).json({ message: 'Failed to update user.' });
+  }
+};
+
+export const resetUserPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (id === req.user.id)
+      return res.status(400).json({ message: 'Use Account settings to change your own password.' });
+
+    const existing = await pool.query(
+      'SELECT id, email, first_name, last_name, is_active FROM users WHERE id = $1',
+      [id]
+    );
+    if (existing.rows.length === 0)
+      return res.status(404).json({ message: 'User not found.' });
+
+    const temporaryPassword = createTemporaryPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+    await pool.query(
+      `UPDATE users
+       SET password_hash = $1, must_change_password = true, updated_at = NOW()
+       WHERE id = $2`,
+      [passwordHash, id]
+    );
+    await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [id]);
+    await revokeUserSessions(id);
+    await writeAuditLog({
+      actorId: req.user.id, action: 'user.password_reset', entityType: 'user', entityId: id, req,
+    });
+
+    return res.status(200).json({
+      message: `Password reset for ${existing.rows[0].first_name} ${existing.rows[0].last_name}. Share the temporary password securely.`,
+      email: existing.rows[0].email,
+      temporaryPassword,
+    });
+  } catch (err) {
+    console.error('Admin password reset error:', err);
+    return res.status(500).json({ message: 'Failed to reset password.' });
   }
 };
 
@@ -293,7 +383,7 @@ export const importStudents = async (req, res) => {
     firstName: String(row.firstName || row.first_name || '').trim(),
     lastName: String(row.lastName || row.last_name || '').trim(),
     email: String(row.email || '').trim().toLowerCase(),
-    phone: String(row.phone || '').trim() || null,
+    phone: sanitizePhone(row.phone),
     course: String(row.course || '').trim() || null,
     school: String(row.school || '').trim() || null,
   }));

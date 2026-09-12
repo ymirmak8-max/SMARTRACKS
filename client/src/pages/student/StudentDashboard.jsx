@@ -684,12 +684,18 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
             </p>
             <div className="permission-list">
               <div className="permission-item">
-                <span className="permission-icon"><VectorIcon name="map" size={21} /></span>
-                <div><strong>Precise location</strong><span>Confirms whether you are at an approved worksite. Your GPS accuracy is included.</span></div>
+                <div className="permission-icon" aria-hidden="true"><VectorIcon name="map" size={21} /></div>
+                <div className="permission-copy">
+                  <strong>Precise location</strong>
+                  <p>Confirms whether you are at an approved worksite. Your GPS accuracy is included.</p>
+                </div>
               </div>
               <div className="permission-item">
-                <span className="permission-icon"><VectorIcon name="camera" size={21} /></span>
-                <div><strong>Camera</strong><span>Captures the attendance selfie required for verification.</span></div>
+                <div className="permission-icon" aria-hidden="true"><VectorIcon name="camera" size={21} /></div>
+                <div className="permission-copy">
+                  <strong>Camera</strong>
+                  <p>Captures the attendance selfie required for verification.</p>
+                </div>
               </div>
             </div>
             {permissionPrompt.denied && (

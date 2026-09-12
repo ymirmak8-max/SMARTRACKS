@@ -42,6 +42,9 @@ CREATE TABLE companies (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE SET NULL;
+
 CREATE TABLE company_locations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,

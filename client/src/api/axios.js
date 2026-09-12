@@ -13,6 +13,26 @@ api.interceptors.request.use((config) => {
 
 let refreshPromise = null;
 
+export const tokenExpiryMs = (token = sessionStorage.getItem('accessToken')) => {
+  if (!token) return 0;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return Number(payload.exp) * 1000;
+  } catch {
+    return 0;
+  }
+};
+
+export const refreshSession = async () => {
+  refreshPromise ||= api.post('/auth/refresh').finally(() => {
+    refreshPromise = null;
+  });
+  const response = await refreshPromise;
+  const token = response.data.accessToken;
+  sessionStorage.setItem('accessToken', token);
+  return token;
+};
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -31,12 +51,7 @@ api.interceptors.response.use(
 
     originalRequest._retry = true;
     try {
-      refreshPromise ||= api.post('/auth/refresh').finally(() => {
-        refreshPromise = null;
-      });
-      const response = await refreshPromise;
-      const token = response.data.accessToken;
-      sessionStorage.setItem('accessToken', token);
+      const token = await refreshSession();
       originalRequest.headers.Authorization = `Bearer ${token}`;
       return api(originalRequest);
     } catch (refreshError) {

@@ -7,7 +7,9 @@ import { reviewDocument } from '../../api/documents';
 import { exportAnalyticsAsCSV, scheduleReport, downloadCSV } from '../../api/exports';
 import useAuth from '../../hooks/useAuth';
 import EmptyState from '../../components/common/EmptyState';
-import { MetricCard, PageHeader, safePercent } from '../../components/common/DashboardUI';
+import { AccountIdentityCard, MetricCard, PageHeader, safePercent } from '../../components/common/DashboardUI';
+import { getProfile } from '../../api/profile';
+import ProfileAvatar from '../../components/common/ProfileAvatar';
 import ReportSchedulerModal from '../../components/common/ReportSchedulerModal';
 import ExportHistoryModal from '../../components/common/ExportHistoryModal';
 import DashboardTopbar from '../../components/common/DashboardTopbar';
@@ -65,6 +67,7 @@ const CoordinatorDashboard = () => {
   const [reportsOpen, setReportsOpen] = useState(false);
   const [deployStudentId, setDeployStudentId] = useState('');
   const [studentQuery, setStudentQuery] = useState('');
+  const [profile, setProfile] = useState(null);
   const [studentSection, setStudentSection] = useState('all');
   const reportsMenuRef = useRef(null);
   const [attendanceImage, setAttendanceImage] = useState(null);
@@ -82,6 +85,9 @@ const CoordinatorDashboard = () => {
   }, [showToast]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    getProfile().then(res => setProfile(res.data.user)).catch(() => {});
+  }, []);
   useEffect(() => {
     if (activeTab === 'analytics' || activeTab === 'risks') {
       setInsightView(activeTab);
@@ -239,22 +245,20 @@ const CoordinatorDashboard = () => {
 
   const deployedStudents = students.filter(student => student.deployment_id);
   const undeployedStudents = students.filter(student => !student.deployment_id);
-  const matchesStudentQuery = student => {
+  const filteredAwaitingStudents = useMemo(() => {
     const query = studentQuery.trim().toLowerCase();
-    if (!query) return true;
-    return [
-      student.id,
-      student.student_id,
-      student.first_name,
-      student.last_name,
-      `${student.first_name || ''} ${student.last_name || ''}`,
-      student.email,
-    ].some(value => String(value || '').toLowerCase().includes(query));
-  };
-  const filteredAwaitingStudents = useMemo(
-    () => undeployedStudents.filter(matchesStudentQuery),
-    [undeployedStudents, studentQuery],
-  );
+    return undeployedStudents.filter(student => {
+      if (!query) return true;
+      return [
+        student.id,
+        student.student_id,
+        student.first_name,
+        student.last_name,
+        `${student.first_name || ''} ${student.last_name || ''}`,
+        student.email,
+      ].some(value => String(value || '').toLowerCase().includes(query));
+    });
+  }, [undeployedStudents, studentQuery]);
   const averageProgress = deployedStudents.length
     ? deployedStudents.reduce((total, student) => total + safePercent(student.hours_rendered, student.required_hours), 0) / deployedStudents.length
     : 0;
@@ -650,21 +654,21 @@ const CoordinatorDashboard = () => {
         ) : activeTab === 'account' ? (
           <div>
             <PageHeader title="Account" subtitle="Update your coordinator profile, company settings, and notification preferences." breadcrumbs={[{ label: 'Coordinator' }, { label: 'Account' }]} />
-            <div className="card" style={{ marginBottom: '0.875rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{
-                  width: '64px', height: '64px', borderRadius: '50%',
-                  background: 'var(--primary)', color: 'var(--on-primary)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '1.5rem', fontWeight: 700, flexShrink: 0,
-                }}>{initials}</div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{user?.first_name} {user?.last_name}</div>
-                  <div style={{ color: 'var(--text-3)', fontSize: '0.82rem', marginTop: '0.15rem' }}>{user?.email}</div>
-                  <span className="badge badge-primary" style={{ marginTop: '0.4rem', fontSize: '0.72rem' }}><VectorIcon name="clipboard" size={13} /> School Coordinator</span>
-                </div>
-              </div>
-            </div>
+            <AccountIdentityCard
+              initials={initials}
+              photoEditor={<ProfileAvatar initials={initials} onToast={showToast} />}
+              name={`${user?.first_name || ''} ${user?.last_name || ''}`.trim() || 'Coordinator'}
+              email={user?.email}
+              roleLabel="School Coordinator"
+              details={[
+                { label: 'Phone', value: profile?.phone || user?.phone || 'Not set' },
+                { label: 'Company', value: (profile?.companies?.length
+                  ? profile.companies.map(company => company.name).join(', ')
+                  : [...new Set(students.map(student => student.company_name).filter(Boolean))].join(', ')) || 'Not assigned' },
+                { label: 'Company address', value: profile?.company_address || 'Not set' },
+                { label: 'School', value: profile?.school || user?.school || 'Not set' },
+              ]}
+            />
             <div className="stat-grid stat-grid-3" style={{ marginBottom: '0.875rem' }}>
               {[
                 { label: 'Students', value: students.length, color: 'var(--primary)' },

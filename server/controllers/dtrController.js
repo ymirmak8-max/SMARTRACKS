@@ -18,6 +18,18 @@ const getDistanceMeters = (lat1, lon1, lat2, lon2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+const publishLiveLocation = async (studentId, coordinates, accuracy, isClockedIn) => {
+  const parsedAccuracy = accuracy == null ? null : Number(accuracy);
+  await pool.query(`
+    INSERT INTO student_locations (student_id, latitude, longitude, accuracy, is_clocked_in, updated_at)
+    VALUES ($1, $2, $3, $4, $5, NOW())
+    ON CONFLICT (student_id) DO UPDATE SET
+      latitude = $2, longitude = $3, accuracy = $4,
+      is_clocked_in = $5, updated_at = NOW()
+  `, [studentId, coordinates.latitude, coordinates.longitude,
+    Number.isFinite(parsedAccuracy) ? parsedAccuracy : null, Boolean(isClockedIn)]);
+};
+
 const parseCoordinates = (latitude, longitude) => {
   const lat = Number(latitude);
   const lng = Number(longitude);
@@ -208,6 +220,9 @@ export const clockIn = async (req, res) => {
        storedSelfieUrl, isValid, anomalyFlag, today, isLate, lateMinutes, (worksite.matched || worksite.uncertain)?.id || null]
     );
 
+    await publishLiveLocation(studentId, coordinates, accuracy, true).catch(error =>
+      console.error('Failed to publish live location after time-in:', error));
+
     await writeAuditLog({ actorId: studentId, action: 'attendance.clock_in', entityType: 'time_record',
       entityId: result.rows[0].id, details: { isValid, anomalyFlag, isLate, lateMinutes,
         worksiteId: (worksite.matched || worksite.uncertain)?.id || null, geofenceState: worksite.state }, req });
@@ -338,13 +353,8 @@ export const clockOut = async (req, res) => {
        clockOutWorksite?.id || null, record.id]
     );
 
-    // Stop publishing an active-shift status immediately after clock-out.
-    await pool.query(
-      `UPDATE student_locations
-       SET latitude = $1, longitude = $2, is_clocked_in = false, updated_at = NOW()
-       WHERE student_id = $3`,
-      [coordinates.latitude, coordinates.longitude, studentId]
-    ).catch(error => console.error('Failed to finalize live location status:', error));
+    await publishLiveLocation(studentId, coordinates, accuracy, false).catch(error =>
+      console.error('Failed to finalize live location status:', error));
 
     await writeAuditLog({ actorId: studentId, action: 'attendance.clock_out', entityType: 'time_record',
       entityId: record.id, details: { isValid, anomalyFlag, totalHours, elapsedHours: hours.elapsedHours, breakMinutes: hours.breakMinutes }, req });
@@ -502,16 +512,12 @@ export const updateLiveLocation = async (req, res) => {
     if (!coordinates || (parsedAccuracy != null && (!Number.isFinite(parsedAccuracy) || parsedAccuracy < 0)))
       return res.status(400).json({ message: 'Valid location data is required.' });
 
-    await pool.query(`
-      INSERT INTO student_locations (student_id, latitude, longitude, accuracy, is_clocked_in, updated_at)
-      VALUES ($1, $2, $3, $4, EXISTS (
-        SELECT 1 FROM time_records
-        WHERE student_id = $1 AND date = $5 AND clock_in IS NOT NULL AND clock_out IS NULL
-      ), NOW())
-      ON CONFLICT (student_id) DO UPDATE SET
-        latitude = $2, longitude = $3, accuracy = $4,
-        is_clocked_in = EXCLUDED.is_clocked_in, updated_at = NOW()
-    `, [studentId, coordinates.latitude, coordinates.longitude, parsedAccuracy, getBusinessDate()]);
+    const openShift = await pool.query(
+      `SELECT 1 FROM time_records
+       WHERE student_id = $1 AND date = $2 AND clock_in IS NOT NULL AND clock_out IS NULL`,
+      [studentId, getBusinessDate()]
+    );
+    await publishLiveLocation(studentId, coordinates, parsedAccuracy, openShift.rows.length > 0);
 
     return res.status(200).json({ message: 'Location updated.' });
   } catch (err) {
@@ -529,27 +535,40 @@ export const getLiveLocations = async (req, res) => {
       accessFilter = 'AND d.coordinator_id = $2';
       params.push(req.user.id);
     } else if (req.user.role === 'supervisor') {
-      accessFilter = 'AND d.supervisor_id = $2';
+      accessFilter = `AND (
+        d.supervisor_id = $2
+        OR (d.supervisor_id IS NULL AND d.company_id = (SELECT company_id FROM users WHERE id = $2))
+      )`;
       params.push(req.user.id);
     }
     const result = await pool.query(`
-      SELECT 
-        sl.student_id, sl.latitude, sl.longitude, sl.accuracy,
-        sl.is_clocked_in, sl.updated_at,
+      SELECT
+        d.student_id,
+        COALESCE(sl.latitude, tr.clock_in_lat) AS latitude,
+        COALESCE(sl.longitude, tr.clock_in_lng) AS longitude,
+        sl.accuracy,
+        COALESCE(sl.is_clocked_in, (tr.clock_in IS NOT NULL AND tr.clock_out IS NULL)) AS is_clocked_in,
+        COALESCE(sl.updated_at, tr.clock_in) AS updated_at,
         u.first_name, u.last_name, u.email,
         d.company_id,
         c.name AS company_name, cl.name AS worksite_name, cl.latitude AS office_lat,
         cl.longitude AS office_lng, cl.geo_radius_meters,
         tr.clock_in, tr.clock_out, tr.anomaly_flag
-      FROM student_locations sl
-      JOIN users u ON u.id = sl.student_id
-      JOIN deployments d ON d.student_id = sl.student_id AND d.status = 'active'
-      JOIN companies c ON c.id = d.company_id
+      FROM deployments d
+      JOIN users u ON u.id = d.student_id
+      LEFT JOIN companies c ON c.id = d.company_id
+      LEFT JOIN student_locations sl ON sl.student_id = d.student_id
       LEFT JOIN company_locations cl ON cl.id = d.primary_location_id
-      LEFT JOIN time_records tr ON tr.student_id = sl.student_id 
-        AND tr.date = $1
-      WHERE sl.updated_at > NOW() - INTERVAL '5 minutes' ${accessFilter}
-      ORDER BY sl.updated_at DESC
+      LEFT JOIN time_records tr ON tr.student_id = d.student_id AND tr.date = $1
+      WHERE d.status = 'active'
+        ${accessFilter}
+        AND COALESCE(sl.latitude, tr.clock_in_lat) IS NOT NULL
+        AND COALESCE(sl.longitude, tr.clock_in_lng) IS NOT NULL
+        AND (
+          sl.updated_at > NOW() - INTERVAL '30 minutes'
+          OR (tr.clock_in IS NOT NULL AND tr.clock_out IS NULL)
+        )
+      ORDER BY COALESCE(sl.updated_at, tr.clock_in) DESC
     `, params);
 
     return res.status(200).json({ locations: result.rows });

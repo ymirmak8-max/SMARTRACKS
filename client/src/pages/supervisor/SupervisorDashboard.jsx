@@ -5,7 +5,7 @@ import useAuth from '../../hooks/useAuth';
 import Sidebar from '../../components/common/Sidebar';
 import DashboardTopbar from '../../components/common/DashboardTopbar';
 import DashboardBottomNav from '../../components/common/DashboardBottomNav';
-import { MetricCard, PageHeader, safePercent } from '../../components/common/DashboardUI';
+import { AccountIdentityCard, MetricCard, PageHeader, safePercent } from '../../components/common/DashboardUI';
 import ReportSchedulerModal from '../../components/common/ReportSchedulerModal';
 import ExportHistoryModal from '../../components/common/ExportHistoryModal';
 import VectorIcon from '../../components/common/VectorIcon';
@@ -16,6 +16,8 @@ import NotificationPreferences from '../../components/common/NotificationPrefere
 import CollapsibleSection from '../../components/common/CollapsibleSection';
 import WorkspacePane from '../../components/common/WorkspacePane';
 import SkeletonPage from '../../components/common/Skeleton';
+import { getProfile } from '../../api/profile';
+import ProfileAvatar from '../../components/common/ProfileAvatar';
 
 const RUBRIC_CRITERIA = [
   { key: 'attitude', label: 'Work attitude & behavior', description: 'Punctuality, discipline, professionalism' },
@@ -44,6 +46,7 @@ const SupervisorDashboard = () => {
   const [toastType, setToastType] = useState('success');
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showExportHistory, setShowExportHistory] = useState(false);
+  const [profile, setProfile] = useState(null);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast(msg); setToastType(type);
@@ -60,6 +63,10 @@ const SupervisorDashboard = () => {
   }, [showToast]);
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
+
+  useEffect(() => {
+    getProfile().then(res => setProfile(res.data.user)).catch(() => {});
+  }, []);
 
   const handleOpenEval = (student, period) => {
     setSelectedStudent(student);
@@ -154,31 +161,21 @@ const SupervisorDashboard = () => {
         ) : activeTab === 'account' ? (
           <div>
             <PageHeader title="Account" subtitle="Update your supervisor profile and notification preferences." breadcrumbs={[{ label: 'Supervisor' }, { label: 'Account' }]} />
-
-            {/* Profile Card */}
-            <div className="card" style={{ marginBottom: '0.875rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{
-                  width: '64px', height: '64px', borderRadius: '50%',
-                  background: 'var(--primary)', color: 'var(--on-primary)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '1.5rem', fontWeight: 700, flexShrink: 0,
-                }}>
-                  {initials}
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>
-                    {user?.first_name} {user?.last_name}
-                  </div>
-                  <div style={{ color: 'var(--text-3)', fontSize: '0.82rem', marginTop: '0.15rem' }}>
-                    {user?.email}
-                  </div>
-                  <span className="badge badge-primary" style={{ marginTop: '0.4rem', fontSize: '0.72rem' }}>
-                    Company Supervisor
-                  </span>
-                </div>
-              </div>
-            </div>
+            <AccountIdentityCard
+              initials={initials}
+              photoEditor={<ProfileAvatar initials={initials} onToast={showToast} />}
+              name={`${user?.first_name || ''} ${user?.last_name || ''}`.trim() || 'Supervisor'}
+              email={user?.email}
+              roleLabel="Company Supervisor"
+              details={[
+                { label: 'Phone', value: profile?.phone || user?.phone || 'Not set' },
+                { label: 'Company', value: (profile?.companies?.length
+                  ? profile.companies.map(company => company.name).join(', ')
+                  : [...new Set(students.map(student => student.company_name).filter(Boolean))].join(', ')) || 'Not assigned' },
+                { label: 'Company address', value: profile?.company_address || students.find(student => student.company_address)?.company_address || 'Not set' },
+                { label: 'Email', value: user?.email || 'Not set' },
+              ]}
+            />
 
             {/* Stats */}
             <div className="stat-grid stat-grid-2" style={{ marginBottom: '0.875rem' }}>
@@ -238,7 +235,14 @@ const SupervisorDashboard = () => {
                           {student.school}
                         </p>
                       )}
-                      <p style={{ color: 'var(--text-3)', margin: 0, fontSize: '0.8rem' }}>{student.company_name}</p>
+                      <p style={{ color: 'var(--text)', margin: '0.35rem 0 0', fontSize: '0.8rem', fontWeight: 600 }}>
+                        {student.company_name || 'No company assigned'}
+                      </p>
+                      {student.company_address && (
+                        <p style={{ color: 'var(--text-3)', margin: '0.1rem 0 0', fontSize: '0.78rem' }}>
+                          {student.company_address}
+                        </p>
+                      )}
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary)' }}>{progressPercent}%</div>
@@ -348,32 +352,26 @@ const SupervisorDashboard = () => {
 
             <form onSubmit={handleSubmitEval}>
               {RUBRIC_CRITERIA.map(criterion => (
-                <div key={criterion.key} style={{
-                  marginBottom: '0.875rem', padding: '0.875rem',
-                  background: 'var(--bg)', borderRadius: 'var(--radius-lg)',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                <div key={criterion.key} className="eval-criterion">
+                  <div className="eval-criterion-header">
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{criterion.label}</div>
-                      <div style={{ color: 'var(--text-3)', fontSize: '0.75rem' }}>{criterion.description}</div>
+                      <div className="eval-criterion-label">{criterion.label}</div>
+                      <div className="eval-criterion-desc">{criterion.description}</div>
                     </div>
                     <input
-                      type="number" min="0" max="100"
+                      className="eval-score-field"
+                      type="number" min="0" max="100" inputMode="numeric"
+                      aria-label={`${criterion.label} score`}
                       value={scores[criterion.key]}
                       onChange={e => handleScoreChange(criterion.key, e.target.value)}
-                      style={{
-                        width: '54px', padding: '0.3rem', textAlign: 'center',
-                        border: '1px solid var(--border)', borderRadius: '6px',
-                        fontSize: '0.9rem', fontWeight: 700, flexShrink: 0,
-                        color: getGrade(scores[criterion.key]).color,
-                        background: 'var(--surface)',
-                      }}
+                      style={{ accentColor: getGrade(scores[criterion.key]).color }}
                     />
                   </div>
                   <input
                     type="range" min="0" max="100"
                     value={scores[criterion.key]}
                     onChange={e => handleScoreChange(criterion.key, e.target.value)}
+                    aria-label={`${criterion.label} slider`}
                     style={{ width: '100%', accentColor: getGrade(scores[criterion.key]).color }}
                   />
                 </div>
@@ -389,7 +387,7 @@ const SupervisorDashboard = () => {
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>Average of all criteria</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '1.75rem', fontWeight: 700, color: getGrade(totalScore).color }}>
+                  <div className="eval-overall-score">
                     {totalScore}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: getGrade(totalScore).color, fontWeight: 600 }}>

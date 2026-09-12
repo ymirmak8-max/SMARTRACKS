@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getUsers, createUser, updateUser, toggleUserStatus, deleteUser, bulkUsers, getAuditLogs } from '../../api/users';
+import { getUsers, createUser, updateUser, toggleUserStatus, deleteUser, resetUserPassword, bulkUsers, getAuditLogs } from '../../api/users';
 import { scheduleReport } from '../../api/exports';
 import useAuth from '../../hooks/useAuth';
 import DeploymentsPage from './DeploymentsPage';
@@ -20,7 +20,10 @@ import StudentImportButton from '../../components/common/StudentImportButton';
 import DocumentRequirementsManager from '../../components/common/DocumentRequirementsManager';
 import CollapsibleSection from '../../components/common/CollapsibleSection';
 import WorkspacePane from '../../components/common/WorkspacePane';
+import SlidingSubnav from '../../components/common/SlidingSubnav';
 import SkeletonPage from '../../components/common/Skeleton';
+import { MAX_PHONE_DIGITS, sanitizePhone } from '../../utils/phone';
+import ProfileAvatar from '../../components/common/ProfileAvatar';
 
 const ROLES = ['admin', 'student', 'coordinator', 'supervisor'];
 const EMPTY_FORM = { firstName: '', lastName: '', email: '', password: '', role: 'student', phone: '', course: '', school: '', companyId: '' };
@@ -64,6 +67,7 @@ const AdminDashboard = () => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showExportHistory, setShowExportHistory] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
+  const [passwordReset, setPasswordReset] = useState(null);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast(msg); setToastType(type);
@@ -114,11 +118,14 @@ const AdminDashboard = () => {
   const openCreate = () => { setEditTarget(null); setForm(EMPTY_FORM); setFormError(''); setShowModal(true); };
   const openEdit = (u) => {
     setEditTarget(u);
-    setForm({ firstName: u.first_name, lastName: u.last_name, email: u.email, password: '', role: u.role, phone: u.phone || '', course: u.course || '', school: u.school || '', companyId: '' });
+    setForm({ firstName: u.first_name, lastName: u.last_name, email: u.email, password: '', role: u.role, phone: sanitizePhone(u.phone), course: u.course || '', school: u.school || '', companyId: u.company_id || '' });
     setFormError(''); setShowModal(true);
   };
 
-  const handleFormChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: name === 'phone' ? sanitizePhone(value) : value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setFormError(''); setFormLoading(true);
@@ -138,6 +145,32 @@ const AdminDashboard = () => {
   const handleToggleStatus = async (id) => {
     try { const res = await toggleUserStatus(id); showToast(res.data.message); fetchUsers(); }
     catch { showToast('Failed to update status.', 'error'); }
+  };
+
+  const handleResetPassword = (target) => {
+    if (target.id === user?.id) {
+      showToast('Use Account settings to change your own password.', 'error');
+      return;
+    }
+    setConfirmation({
+      title: `Reset password for ${target.first_name} ${target.last_name}?`,
+      message: 'Their current password and signed-in sessions will stop working. A temporary password will be shown once so you can share it securely.',
+      confirmLabel: 'Reset password',
+      onConfirm: async () => {
+        setConfirmation(null);
+        try {
+          const res = await resetUserPassword(target.id);
+          setPasswordReset({
+            name: `${target.first_name} ${target.last_name}`,
+            email: res.data.email || target.email,
+            temporaryPassword: res.data.temporaryPassword,
+          });
+          showToast(res.data.message);
+        } catch (err) {
+          showToast(err.response?.data?.message || 'Failed to reset password.', 'error');
+        }
+      },
+    });
   };
 
   const handleDelete = async (id, name) => {
@@ -234,14 +267,10 @@ const AdminDashboard = () => {
             <PageHeader title="Account" subtitle="Update your administrator profile, security, and notification preferences." breadcrumbs={[{ label: 'Administrator' }, { label: 'Account' }]} />
             <div className="card" style={{ marginBottom: '0.875rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{
-                  width: '64px', height: '64px', borderRadius: '50%',
-                  background: 'var(--primary)', color: 'var(--on-primary)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '1.5rem', fontWeight: 700, flexShrink: 0,
-                }}>
-                  {user?.first_name?.[0]}{user?.last_name?.[0]}
-                </div>
+                <ProfileAvatar
+                  initials={`${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`.toUpperCase()}
+                  onToast={showToast}
+                />
                 <div>
                   <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{user?.first_name} {user?.last_name}</div>
                   <div style={{ color: 'var(--text-3)', fontSize: '0.82rem', marginTop: '0.15rem' }}>{user?.email}</div>
@@ -267,50 +296,65 @@ const AdminDashboard = () => {
           </div>
 
         ) : (
-          <>
+          <div className="user-management-page">
             <PageHeader title="User management" subtitle={`${pendingApprovals} account${pendingApprovals === 1 ? '' : 's'} awaiting approval`} breadcrumbs={[{ label: 'Administrator' }, { label: 'Users' }]} actions={
                       <div className="admin-header-actions">
-                        <button onClick={openAudit} className="btn-compact-primary icon-label"><VectorIcon name="clock" size={16} /> Audit history</button>
+                        <button type="button" onClick={openAudit} className="btn-compact-primary icon-label"><VectorIcon name="clock" size={16} /> Audit history</button>
                         <StudentImportButton onImported={(message) => { showToast(message); fetchUsers(); }} />
-                        <button onClick={openCreate} className="btn-compact-primary icon-label"><VectorIcon name="plus" size={16} /> Add user account</button>
+                        <button type="button" onClick={openCreate} className="btn-compact-primary icon-label"><VectorIcon name="plus" size={16} /> Add user account</button>
                       </div>
             } />
 
-            <div className="dashboard-toolbar">
-              <input type="text" placeholder="Search by name, email, or role" value={search}
-                onChange={(e) => setSearch(e.target.value)} style={{
-                  flex: 1, padding: '0.65rem 1rem', border: '1.5px solid var(--border)',
-                  borderRadius: 'var(--radius)', fontSize: '0.9rem',
-                  background: 'var(--surface)', color: 'var(--text)',
+            <div className="user-directory-toolbar" role="search" aria-label="Search and filter users">
+              <input
+                type="search"
+                placeholder="Search by name, email, or role"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search users by name, email, or role"
+              />
+              <button
+                type="button"
+                onClick={() => { setShowApprovalOnly(!showApprovalOnly); setSelectedIds([]); setSelectAll(false); }}
+                className={`btn-compact-primary ${showApprovalOnly ? 'active' : ''}`}
+              >
+                {showApprovalOnly ? 'Approval queue on' : 'Approval queue'}
+              </button>
+            </div>
+            <SlidingSubnav
+              ariaLabel="Filter users by role"
+              activeKey={filterRole || 'all'}
+              onChange={key => setFilterRole(key === 'all' ? '' : key)}
+              items={[
+                { key: 'all', label: 'All' },
+                { key: 'student', label: 'Students' },
+                { key: 'supervisor', label: 'Supervisors' },
+                { key: 'coordinator', label: 'Coordinators' },
+                { key: 'admin', label: 'Admins' },
+              ]}
+            />
+            <div className="user-directory-tools">
+              <label className="user-select-all">
+                <input type="checkbox" checked={selectAll} onChange={(e) => {
+                  const checked = e.target.checked; setSelectAll(checked);
+                  if (checked) setSelectedIds(users.map(u => u.id)); else setSelectedIds([]);
                 }} />
-              <div className="admin-bulk-controls">
-                <button onClick={() => { setShowApprovalOnly(!showApprovalOnly); setSelectedIds([]); setSelectAll(false); }}
-                  className={`btn-compact-primary ${showApprovalOnly ? 'active' : ''}`}>{showApprovalOnly ? 'Showing: Approval Queue' : 'Approval Queue'}</button>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <input type="checkbox" checked={selectAll} onChange={(e) => {
-                    const checked = e.target.checked; setSelectAll(checked);
-                    if (checked) setSelectedIds(users.map(u => u.id)); else setSelectedIds([]);
-                  }} /> Select all
-                </label>
-                <select value="" onChange={(e) => {
+                Select all
+              </label>
+              <select
+                aria-label="Bulk actions"
+                value=""
+                onChange={(e) => {
                   const val = e.target.value; if (!val) return;
                   handleBulkAction(val); e.target.selectedIndex = 0;
-                }} style={{ padding: '0.65rem 0.75rem', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)' }}>
-                  <option value="">Bulk actions</option>
-                  <option value="approve">Approve selected</option>
-                  <option value="activate">Activate selected</option>
-                  <option value="deactivate">Deactivate selected</option>
-                  <option value="delete">Delete selected</option>
-                  <option value="reject">Reject selected</option>
-                </select>
-              </div>
-              <select aria-label="Filter users by role" value={filterRole} onChange={(e) => setFilterRole(e.target.value)} style={{
-                padding: '0.65rem 0.75rem', border: '1.5px solid var(--border)',
-                borderRadius: 'var(--radius)', fontSize: '0.85rem',
-                background: 'var(--surface)', color: 'var(--text)',
-              }}>
-                <option value="">All Roles</option>
-                {ROLES.map(r => <option key={r} value={r} style={{ textTransform: 'capitalize' }}>{r}</option>)}
+                }}
+              >
+                <option value="">Bulk actions</option>
+                <option value="approve">Approve selected</option>
+                <option value="activate">Activate selected</option>
+                <option value="deactivate">Deactivate selected</option>
+                <option value="delete">Delete selected</option>
+                <option value="reject">Reject selected</option>
               </select>
             </div>
 
@@ -343,9 +387,15 @@ const AdminDashboard = () => {
                     }}>{u.approval_status === 'pending' ? 'Pending approval' : u.is_active ? 'Active' : 'Inactive'}</span>
                   </div>
                 </div>
-                {u.phone && <div className="icon-label" style={{ fontSize: '0.82rem', color: 'var(--text-3)', marginBottom: '0.5rem' }}><VectorIcon name="phone" size={14} /> {u.phone}</div>}
-                <div className="dashboard-row-actions" style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                {u.phone && <div className="icon-label" style={{ fontSize: '0.82rem', color: 'var(--text-3)', marginBottom: '0.35rem' }}><VectorIcon name="phone" size={14} /> {u.phone}</div>}
+                {u.company_name && <div className="icon-label" style={{ fontSize: '0.82rem', color: 'var(--text-3)', marginBottom: '0.5rem' }}><VectorIcon name="building" size={14} /> {u.company_name}</div>}
+                <div className="dashboard-row-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
                   <button onClick={() => openEdit(u)} className="action-btn action-btn-primary icon-label" style={{ flex: 1 }}><VectorIcon name="pencil" size={15} /> Edit</button>
+                  <button onClick={() => handleResetPassword(u)} disabled={u.id === user?.id}
+                    title={u.id === user?.id ? 'Use Account settings to change your own password' : undefined}
+                    className="action-btn action-btn-gray icon-label" style={{ flex: 1 }}>
+                    <VectorIcon name="lock" size={15} /> Reset password
+                  </button>
                   <button onClick={() => handleToggleStatus(u.id)} disabled={u.id === user?.id}
                     title={u.id === user?.id ? 'You cannot change your own status' : undefined}
                     className={`action-btn icon-label ${u.approval_status === 'pending' || !u.is_active ? 'action-btn-success' : 'action-btn-warning'}`}
@@ -405,7 +455,7 @@ const AdminDashboard = () => {
                 </div>
               </div>
             )}
-          </>
+          </div>
         )}
         </WorkspacePane>
       </div>
@@ -436,7 +486,8 @@ const AdminDashboard = () => {
               </div>
               <div className="form-group">
                 <label>Phone</label>
-                <input type="text" name="phone" value={form.phone} onChange={handleFormChange} placeholder="e.g. 0917 123 4567" />
+                  <input type="tel" name="phone" inputMode="numeric" autoComplete="tel" maxLength={MAX_PHONE_DIGITS}
+                    value={form.phone} onChange={handleFormChange} placeholder="09XXXXXXXXX" />
               </div>
               <div className="form-group">
                 <label>Role</label>
@@ -518,6 +569,36 @@ const AdminDashboard = () => {
         onCancel={() => setConfirmation(null)}
         onConfirm={confirmation?.onConfirm}
       />
+      {passwordReset && (
+        <div className="modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setPasswordReset(null); }}>
+          <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
+            <div className="modal-handle" />
+            <h2 className="modal-title" id="reset-password-title">Temporary password</h2>
+            <p style={{ color: 'var(--text-2)', marginBottom: '1rem' }}>
+              Share this once with {passwordReset.name}. They should sign in and change it afterward.
+            </p>
+            <div className="form-group">
+              <label>Email</label>
+              <input readOnly value={passwordReset.email} />
+            </div>
+            <div className="form-group">
+              <label>Temporary password</label>
+              <input readOnly value={passwordReset.temporaryPassword} />
+            </div>
+            <div className="modal-actions grid-2">
+              <button type="button" className="action-btn action-btn-gray" onClick={() => setPasswordReset(null)}>Close</button>
+              <button type="button" className="btn-primary" style={{ margin: 0 }} onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(passwordReset.temporaryPassword);
+                  showToast('Temporary password copied.');
+                } catch {
+                  showToast('Copy the temporary password from the field.', 'error');
+                }
+              }}>Copy password</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className={`toast ${toastType === 'error' ? 'toast-error' : ''}`}>{toast}</div>

@@ -33,3 +33,6 @@ portfolio-cover-check.png
 
 # Hosting
 .vercel/
+
+.vercel
+.env*

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
 const AUTH_ORDER = {
@@ -10,14 +10,13 @@ const AUTH_ORDER = {
 
 const AuthFlow = () => {
   const location = useLocation();
-  const previousPath = useRef(location.pathname);
-  const nextIndex = AUTH_ORDER[location.pathname] ?? 0;
-  const previousIndex = AUTH_ORDER[previousPath.current] ?? 0;
+  const [paths, setPaths] = useState({ current: location.pathname, previous: location.pathname });
+  if (location.pathname !== paths.current) {
+    setPaths({ current: location.pathname, previous: paths.current });
+  }
+  const nextIndex = AUTH_ORDER[paths.current] ?? 0;
+  const previousIndex = AUTH_ORDER[paths.previous] ?? 0;
   const direction = nextIndex >= previousIndex ? 'forward' : 'back';
-
-  useEffect(() => {
-    previousPath.current = location.pathname;
-  }, [location.pathname]);
 
   useEffect(() => {
     delete document.documentElement.dataset.sidebar;
