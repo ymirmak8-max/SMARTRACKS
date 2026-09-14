@@ -1646,7 +1646,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--primary) 4%, transparent);
   color: var(--primary);
   background: var(--primary-light);
   border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
-  border-radius: 8px;
+  border-radius: 50%;
   font-size: 0.68rem;
   font-weight: 750;
   letter-spacing: 0.02em;
@@ -5532,5 +5532,75 @@ input.eval-score-field[type='number'] {
   padding: 0;
   overflow: hidden;
 }
-.user-menu-avatar.profile-avatar { border-radius: 8px; }
+.user-menu-avatar.profile-avatar,
 .user-menu-panel-avatar.profile-avatar { border-radius: 50%; }
+
+.permission-card,
+.permission-card .modal-title,
+.permission-card .permission-summary,
+.permission-card .permission-copy,
+.permission-card .permission-copy strong,
+.permission-card .permission-copy p,
+.permission-card .permission-privacy,
+.permission-card .permission-help {
+  letter-spacing: 0 !important;
+  word-spacing: 0 !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+.permission-actions > button,
+.attendance-modal-actions > button {
+  white-space: nowrap !important;
+  overflow: visible !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  word-spacing: 0 !important;
+  letter-spacing: 0.01em !important;
+  min-width: 7.5rem !important;
+  pointer-events: auto !important;
+}
+.permission-continue,
+.permission-actions .btn-primary {
+  color: #041820 !important;
+  -webkit-text-fill-color: #041820 !important;
+  background: #5CE1FF !important;
+  border-color: #2ec4e0 !important;
+}
+.permission-continue:disabled,
+.permission-actions .btn-primary:disabled {
+  color: #041820 !important;
+  -webkit-text-fill-color: #041820 !important;
+  opacity: 0.72;
+}
+.attendance-proof-upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-2);
+  font-size: 0.84rem;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+.attendance-proof-upload input {
+  display: none;
+}
+.attendance-proof-upload:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.toast,
+.toast-error {
+  z-index: 4000 !important;
+  pointer-events: none;
+}
+.attendance-submit-error {
+  margin-bottom: 0.85rem;
+  color: var(--danger);
+  background: var(--danger-light);
+}

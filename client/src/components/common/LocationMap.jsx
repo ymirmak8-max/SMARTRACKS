@@ -118,6 +118,9 @@ const LocationMap = ({ studentLat, studentLng, accuracy, officeLat, officeLng, r
     if (!studentMarkerRef.current) {
       studentMarkerRef.current = L.marker(studentPosition, {
         icon: markerIcon(L, 'user', statusColor),
+        draggable: false,
+        keyboard: false,
+        autoPan: false,
       }).addTo(map).bindPopup(studentPopup);
       studentMarkerRef.current._smartrackColor = statusColor;
     } else {
@@ -194,7 +197,7 @@ const LocationMap = ({ studentLat, studentLng, accuracy, officeLat, officeLng, r
     <div className="location-map-shell">
       <div ref={containerRef} className="location-map-canvas" aria-label="Your live location map" />
       <MapControls mapStyle={mapStyle} onStyleChange={setMapStyle} onFit={fitLocations}
-        privacyLabel="Your location is protected" />
+        privacyLabel="Location recorded automatically" />
     </div>
   );
 };

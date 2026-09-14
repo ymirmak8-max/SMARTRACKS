@@ -28,17 +28,6 @@ const CompletionPanel = lazy(() => import('../../components/common/CompletionPan
 const NO_WORKSITES = [];
 const STUDENT_VIEWS = ['dashboard', 'documents', 'attendance', 'completion', 'profile'];
 
-const distanceBetweenPositions = (first, second) => {
-  const toRadians = value => value * Math.PI / 180;
-  const dLat = toRadians(second.coords.latitude - first.coords.latitude);
-  const dLng = toRadians(second.coords.longitude - first.coords.longitude);
-  const lat1 = toRadians(first.coords.latitude);
-  const lat2 = toRadians(second.coords.latitude);
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
 const formatDurationHours = value => {
   const hours = Number(value);
   if (!Number.isFinite(hours) || hours < 0) return '—';
@@ -50,6 +39,30 @@ const formatDurationHours = value => {
   if (!minutes) return `${wholeHours} ${wholeHours === 1 ? 'hr' : 'hrs'}`;
   return `${wholeHours} ${wholeHours === 1 ? 'hr' : 'hrs'} ${minutes} min`;
 };
+
+const ATTENDANCE_PROOF_MAX_BYTES = 2 * 1024 * 1024;
+const GPS_RECORDING_LIMIT_METERS = 250;
+
+const toGpsSample = (source) => {
+  if (!source) return null;
+  const latitude = Number(source.latitude ?? source.coords?.latitude);
+  const longitude = Number(source.longitude ?? source.coords?.longitude);
+  const accuracy = Number(source.accuracy ?? source.coords?.accuracy);
+  if (![latitude, longitude, accuracy].every(Number.isFinite) || accuracy < 0) return null;
+  return { latitude, longitude, accuracy };
+};
+
+const readProofImage = (file) => new Promise((resolve, reject) => {
+  if (!file) return reject(new Error('Choose a photo.'));
+  if (!['image/jpeg', 'image/png'].includes(file.type))
+    return reject(new Error('Photo must be a JPG or PNG.'));
+  if (file.size > ATTENDANCE_PROOF_MAX_BYTES)
+    return reject(new Error('Photo must be smaller than 2 MB.'));
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(new Error('Unable to read that photo.'));
+  reader.readAsDataURL(file);
+});
 
 const StudentDashboard = () => {
   const { user } = useAuth();
@@ -83,8 +96,12 @@ const StudentDashboard = () => {
   const [syncingAttendance, setSyncingAttendance] = useState(false);
   const [latestReceipt, setLatestReceipt] = useState(null);
   const [attendanceChallenge, setAttendanceChallenge] = useState(null);
-  const [maximumGpsAccuracy, setMaximumGpsAccuracy] = useState(50);
+  const [maximumGpsAccuracy, setMaximumGpsAccuracy] = useState(100);
   const [permissionPrompt, setPermissionPrompt] = useState(null);
+  const [permissionBusy, setPermissionBusy] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const attendanceCaptureRef = useRef(0);
 
   // Live location tracking
   const handleExitPerimeter = async (position) => {
@@ -100,7 +117,7 @@ const StudentDashboard = () => {
   }
 };
 
-const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
+const { coords, distance, isInside, accuracy, error: locationError, matchedLocation } = useLocation(
   deployment?.latitude,
   deployment?.longitude,
   deployment?.geo_radius_meters,
@@ -165,76 +182,115 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
     };
   }, [refreshQueueSummary, syncQueuedAttendance]);
 
-  const getGPS = () => new Promise((resolve, reject) => {
+  const getGPS = (seedCoords = null) => new Promise((resolve, reject) => {
     if (!window.isSecureContext)
       return reject(new Error('GPS requires a secure HTTPS connection.'));
     if (!navigator.geolocation)
       return reject(new Error('Geolocation is not supported on this device.'));
     setGpsLoading(true);
-    let bestPosition = null;
-    const goodPositions = [];
+    let bestSample = toGpsSample(seedCoords);
     let settled = false;
     let watchId;
+    let improveTimer;
     const finish = (callback, value) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timeoutId);
+      window.clearTimeout(improveTimer);
       if (watchId != null) navigator.geolocation.clearWatch(watchId);
       setGpsLoading(false);
       callback(value);
     };
-    const timeoutId = window.setTimeout(() => {
-      const measured = bestPosition?.coords?.accuracy;
-      const message = Number.isFinite(measured)
-        ? `GPS accuracy is currently ${Math.round(measured)} meters. Move near a window or outdoors, enable precise location, then try again. Required: ${maximumGpsAccuracy} meters or better.`
-        : 'GPS request timed out. Enable precise location, move near a window or outdoors, then try again.';
+    const accept = (sample) => {
+      setGpsCoords(sample);
+      setGpsError('');
+      finish(resolve, sample);
+    };
+    const recordingLimit = Math.max(GPS_RECORDING_LIMIT_METERS, maximumGpsAccuracy);
+    const acceptIfReady = (force = false) => {
+      if (!bestSample) return false;
+      if (bestSample.accuracy <= maximumGpsAccuracy) {
+        accept(bestSample);
+        return true;
+      }
+      if (force && bestSample.accuracy <= recordingLimit) {
+        accept(bestSample);
+        return true;
+      }
+      if (!force) return false;
+      const message = `Your GPS is ±${Math.round(bestSample.accuracy)}m. A smaller number is more precise. Smartrack can record a fix within ±${recordingLimit}m. Enable Precise Location and try near a window.`;
       setGpsError(message);
       finish(reject, new Error(message));
-    }, 20000);
+      return true;
+    };
+    const noteSample = (sample) => {
+      if (!sample) return;
+      if (!bestSample || sample.accuracy < bestSample.accuracy) bestSample = sample;
+      if (bestSample.accuracy <= Math.min(maximumGpsAccuracy, 35)) {
+        accept(bestSample);
+        return;
+      }
+      if (improveTimer != null) return;
+      if (bestSample.accuracy <= maximumGpsAccuracy) {
+        improveTimer = window.setTimeout(() => acceptIfReady(false), 6000);
+      } else if (bestSample.accuracy <= recordingLimit) {
+        improveTimer = window.setTimeout(() => acceptIfReady(true), 10000);
+      }
+    };
+    const seedIsReady = bestSample && bestSample.accuracy <= maximumGpsAccuracy;
+    const timeoutId = window.setTimeout(() => {
+      if (acceptIfReady(true)) return;
+      const message = 'GPS request timed out. Enable precise location, move near a window or outdoors, then try again.';
+      setGpsError(message);
+      finish(reject, new Error(message));
+    }, seedIsReady ? 8000 : 45000);
+    noteSample(bestSample);
     watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        if (!bestPosition || pos.coords.accuracy < bestPosition.coords.accuracy) bestPosition = pos;
-        if (pos.coords.accuracy > maximumGpsAccuracy) return;
-        goodPositions.push(pos);
-        if (goodPositions.length < 2) return;
-        const previous = goodPositions[goodPositions.length - 2];
-        const stabilityLimit = Math.max(10, previous.coords.accuracy, pos.coords.accuracy);
-        if (distanceBetweenPositions(previous, pos) > stabilityLimit) return;
-        const accepted = previous.coords.accuracy <= pos.coords.accuracy ? previous : pos;
-        const c = { latitude: accepted.coords.latitude, longitude: accepted.coords.longitude, accuracy: accepted.coords.accuracy };
-        setGpsCoords(c);
-        setGpsError('');
-        finish(resolve, c);
+        noteSample(toGpsSample(pos.coords));
       },
       (error) => {
-        const message = error.code === 1
-          ? 'GPS access denied. Enable location and precise-location permission in your browser settings.'
-          : error.code === 2
-            ? 'GPS position is unavailable. Move to an open area and try again.'
-            : 'GPS request timed out. Check location services and try again.';
-        setGpsError(message);
-        finish(reject, new Error(message));
+        if (error.code === 1) {
+          const message = 'GPS access denied. Enable location and precise-location permission in your browser settings.';
+          setGpsError(message);
+          finish(reject, new Error(message));
+          return;
+        }
+        if (acceptIfReady(false)) return;
+        if (error.code === 2 && !bestSample) {
+          const message = 'GPS position is unavailable. Move to an open area and try again.';
+          setGpsError(message);
+          finish(reject, new Error(message));
+        }
       },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+      { enableHighAccuracy: true, maximumAge: 2500, timeout: 60000 }
     );
   });
 
-  const startCamera = async () => {
-    if (!window.isSecureContext)
-      throw new Error('Camera access requires a secure HTTPS connection.');
-    if (!navigator.mediaDevices?.getUserMedia)
-      throw new Error('Camera access is not supported by this browser.');
-    setShowCamera(true); setCapturedSelfie(null);
+  const openProofCapture = async () => {
+    setCameraError('');
+    setShowCamera(true);
+    setCapturedSelfie(null);
+    if (!window.isSecureContext) {
+      setCameraError('Camera needs a secure connection. Upload a photo of you at the company instead.');
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Camera is not available on this device. Upload a photo instead.');
+      return;
+    }
     try {
       await new Promise(resolve => requestAnimationFrame(resolve));
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'user' } }, audio: false });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
       if (videoRef.current) videoRef.current.srcObject = stream;
       else stream.getTracks().forEach(track => track.stop());
     } catch (error) {
-      setShowCamera(false);
-      throw new Error(error.name === 'NotAllowedError'
-        ? 'Camera access denied. Enable camera permission in your browser settings.'
-        : error.message || 'Unable to start the camera.', { cause: error });
+      setCameraError(error.name === 'NotAllowedError'
+        ? 'Camera access denied. Upload a photo of you at the company, or enable the camera in your browser settings.'
+        : 'Unable to start the camera. Upload a photo of you at the company instead.');
     }
   };
 
@@ -258,32 +314,64 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
     stopCamera();
   };
 
+  const handleProofUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const dataUrl = await readProofImage(file);
+      stopCamera();
+      setCapturedSelfie(dataUrl);
+    } catch (error) {
+      showToast(error.message || 'Unable to use that photo.', 'error');
+    }
+  };
+
   const beginAttendanceCapture = async (action) => {
-    setCurrentAction(action); setGpsError('');
+    const captureId = ++attendanceCaptureRef.current;
+    setPermissionBusy(true);
+    setCurrentAction(action);
+    setGpsError('');
     try {
       const challenge = await getAttendanceChallenge(action);
+      if (captureId !== attendanceCaptureRef.current) return;
       setAttendanceChallenge(challenge.data.token);
-      await getGPS();
-      await startCamera();
+      const sample = await getGPS(coords);
+      if (captureId !== attendanceCaptureRef.current) return;
+      if (sample.accuracy > maximumGpsAccuracy) {
+        showToast(`Location recorded at ±${Math.round(sample.accuracy)}m. Smaller numbers are more precise. Staff will see this as low GPS accuracy.`, 'warning');
+      }
+      await openProofCapture();
       setPermissionPrompt(null);
     }
     catch (error) {
+      if (captureId !== attendanceCaptureRef.current) return;
       setCurrentAction(null);
       const denied = /denied|permission/i.test(error.message || '');
       if (denied) setPermissionPrompt({ action, denied: true, message: error.message });
       else showToast(error.message || 'Unable to start attendance verification.', 'error');
     }
+    finally {
+      if (captureId === attendanceCaptureRef.current) setPermissionBusy(false);
+    }
+  };
+
+  const cancelAttendanceCapture = () => {
+    attendanceCaptureRef.current += 1;
+    stopCamera();
+    setPermissionPrompt(null);
+    setCurrentAction(null);
+    setPermissionBusy(false);
+    setCapturedSelfie(null);
+    setCameraError('');
   };
 
   const handleInitiateAction = async (action) => {
     let permissionsGranted = false;
     if (navigator.permissions?.query) {
       try {
-        const [locationPermission, cameraPermission] = await Promise.all([
-          navigator.permissions.query({ name: 'geolocation' }),
-          navigator.permissions.query({ name: 'camera' }),
-        ]);
-        permissionsGranted = locationPermission.state === 'granted' && cameraPermission.state === 'granted';
+        const locationPermission = await navigator.permissions.query({ name: 'geolocation' });
+        permissionsGranted = locationPermission.state === 'granted';
       } catch { /* Some mobile browsers do not expose camera permission state. */ }
     }
     if (permissionsGranted) await beginAttendanceCapture(action);
@@ -295,7 +383,7 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
   }, []);
 
   const handleSubmitAction = async () => {
-    if (!capturedSelfie) return showToast('Please take a selfie.', 'error');
+    if (!capturedSelfie) return showToast('Please take or upload a photo at the company.', 'error');
     if (!gpsCoords) return showToast('GPS not found.', 'error');
 
     if (currentAction === 'out' && !showEvidenceModal) {
@@ -304,6 +392,7 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
     }
 
     setActionLoading(true);
+    setSubmitError('');
     try {
       const payload = {
         latitude: gpsCoords.latitude,
@@ -318,13 +407,23 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
         let response;
         try { response = await clockIn(payload); }
         catch (error) {
-          if (error.response) throw error;
-          await queueAttendance('in', payload);
-          showToast('Time In saved offline. It will synchronize automatically.', 'warning');
+          if (error.response?.data?.code === 'ATTENDANCE_CHALLENGE_INVALID') {
+            const challenge = await getAttendanceChallenge('in');
+            payload.attendanceChallenge = challenge.data.token;
+            setAttendanceChallenge(challenge.data.token);
+            response = await clockIn(payload);
+          } else if (/already timed in/i.test(error.response?.data?.message || '')) {
+            response = error.response;
+          } else if (error.response) throw error;
+          else {
+            await queueAttendance('in', payload);
+            showToast('Time In saved offline. It will synchronize automatically.', 'warning');
+          }
         }
-        if (response) {
+        if (response?.data?.record) setTodayRecord(response.data.record);
+        if (response?.data) {
           setLatestReceipt(response.data.receipt || null);
-          showToast(response.data.message, response.data.isValid ? 'success' : 'warning');
+          showToast(response.data.message || 'Timed in.', response.data.isValid === false || response.data.alreadyRecorded ? 'warning' : 'success');
         }
       } else {
         const clockOutPayload = { ...payload, evidenceUrl: evidenceUrl || null, evidenceNote: evidenceNote || null };
@@ -341,9 +440,13 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
         }
       }
       setCapturedSelfie(null); setCurrentAction(null); setGpsCoords(null); setAttendanceChallenge(null);
-      setEvidenceUrl(null); setEvidenceNote(''); setShowEvidenceModal(false);
+      setEvidenceUrl(null); setEvidenceNote(''); setShowEvidenceModal(false); setSubmitError('');
       if (navigator.onLine) await fetchData();
-    } catch (err) { showToast(err.response?.data?.message || 'Action failed.', 'error'); }
+    } catch (err) {
+      const message = err.response?.data?.message || 'Action failed.';
+      setSubmitError(message);
+      showToast(message, 'error');
+    }
     finally { setActionLoading(false); }
   };
 
@@ -554,7 +657,7 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
                   isInside={isInside}
                 /></Suspense>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: '0.5rem', textAlign: 'center' }}>
-  <span className="icon-label"><VectorIcon name="map" size={13} /> Precise coordinates protected</span>
+  <span className="icon-label"><VectorIcon name="map" size={13} /> Location is recorded automatically. You cannot move this pin.</span>
   {deployment?.company_name && <span className="icon-label" style={{ marginLeft: '0.45rem' }}><VectorIcon name="building" size={13} /> {deployment.company_name}</span>}
 </div>
 <div style={{
@@ -568,6 +671,7 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
   <span style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>
     GPS accuracy: ±{accuracy}m
     {accuracy <= 10 ? ' (Excellent)' : accuracy <= 30 ? ' (Good)' : accuracy <= 100 ? ' (Fair)' : ' (Poor)'}
+    {' · smaller is more precise'}
   </span>
 </div>
               </div>
@@ -583,25 +687,25 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
             )}
 
             {/* GPS Error */}
-            {gpsError && (
+            {(gpsError || (!coords && locationError)) && (
               <div style={{
                 background: 'var(--danger-light)', border: '1px solid #FCA5A5',
                 borderRadius: 'var(--radius-lg)', padding: '0.875rem 1rem',
                 color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '0.875rem',
-              }}>{gpsError}</div>
+              }}>{gpsError || locationError}</div>
             )}
 
             {/* Clock Buttons */}
             <div className="grid-2" style={{ marginBottom: '1rem' }}>
               <button className="clock-btn clock-btn-in"
                 onClick={() => handleInitiateAction('in')}
-                disabled={!!isClockedIn || !!isClockedOut || actionLoading}>
+                disabled={!!isClockedIn || !!isClockedOut || actionLoading || gpsLoading || permissionBusy}>
                 <span className="clock-btn-icon"></span>
-                {gpsLoading ? 'Getting GPS...' : 'Time In'}
+                {gpsLoading || permissionBusy ? 'Getting GPS...' : 'Time In'}
               </button>
               <button className="clock-btn clock-btn-out"
                 onClick={() => handleInitiateAction('out')}
-                disabled={!isClockedIn || actionLoading}>
+                disabled={!isClockedIn || actionLoading || gpsLoading || permissionBusy}>
                 <span className="clock-btn-icon"></span>
                 Time Out
               </button>
@@ -679,35 +783,35 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
             </h2>
             <p className="permission-summary">
               {permissionPrompt.denied
-                ? 'Smartrack cannot verify attendance until camera and precise location access are enabled.'
-                : `To ${permissionPrompt.action === 'in' ? 'time in' : 'time out'}, Smartrack needs these permissions:`}
+                ? 'Smartrack cannot verify attendance until location access is enabled. A company photo is also required.'
+                : `To ${permissionPrompt.action === 'in' ? 'time in' : 'time out'}, Smartrack records your current location automatically and needs a photo as proof:`}
             </p>
             <div className="permission-list">
               <div className="permission-item">
                 <div className="permission-icon" aria-hidden="true"><VectorIcon name="map" size={21} /></div>
                 <div className="permission-copy">
-                  <strong>Precise location</strong>
-                  <p>Confirms whether you are at an approved worksite. Your GPS accuracy is included.</p>
+                  <strong>Current location</strong>
+                  <p>Your GPS position is recorded automatically. You cannot move or pick a different pin.</p>
                 </div>
               </div>
               <div className="permission-item">
                 <div className="permission-icon" aria-hidden="true"><VectorIcon name="camera" size={21} /></div>
                 <div className="permission-copy">
-                  <strong>Camera</strong>
-                  <p>Captures the attendance selfie required for verification.</p>
+                  <strong>Company photo</strong>
+                  <p>Take a picture or upload one showing you are inside the company.</p>
                 </div>
               </div>
             </div>
             {permissionPrompt.denied && (
               <div className="permission-help">
-                Open this site or app in your device settings, allow Camera and Location, enable Precise Location, then return and try again.
+                Open this site in your device settings, allow Location, enable Precise Location, then return and try again. You can still upload a photo if the camera is blocked.
               </div>
             )}
-            {!permissionPrompt.denied && <p className="permission-privacy"><VectorIcon name="lock" size={14} /> Access is requested only when needed for attendance.</p>}
+            {!permissionPrompt.denied && <p className="permission-privacy"><VectorIcon name="lock" size={14} /> Location is captured only for attendance. The map is view-only.</p>}
             <div className="modal-actions grid-2 attendance-modal-actions permission-actions">
-              <button onClick={() => { setPermissionPrompt(null); setCurrentAction(null); }} className="action-btn action-btn-gray">Not now</button>
-              <button onClick={() => beginAttendanceCapture(permissionPrompt.action)} className="btn-primary" style={{ margin: 0 }}>
-                {permissionPrompt.denied ? 'Try Again' : 'Continue'}
+              <button type="button" onClick={cancelAttendanceCapture} className="action-btn action-btn-gray" disabled={permissionBusy}>Not now</button>
+              <button type="button" onClick={() => beginAttendanceCapture(permissionPrompt.action)} className="btn-primary permission-continue" disabled={permissionBusy} style={{ margin: 0 }}>
+                {permissionBusy ? 'Getting location…' : permissionPrompt.denied ? 'Try again' : 'Continue'}
               </button>
             </div>
           </section>
@@ -718,15 +822,26 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
         <div className="modal-overlay attendance-modal-overlay">
           <div className="modal-content attendance-modal-content">
             <div className="modal-handle" />
-            <div className="modal-title">{currentAction === 'in' ? 'Time In' : 'Time Out'} — Take Selfie</div>
+            <div className="modal-title">{currentAction === 'in' ? 'Time In' : 'Time Out'} — Company proof</div>
+            <p className="permission-summary" style={{ marginBottom: '0.85rem' }}>
+              Take a photo or upload one that shows you are inside the company. Location is already recorded and cannot be changed.
+            </p>
             <video ref={videoRef} autoPlay playsInline style={{
-              width: '100%', borderRadius: 'var(--radius-lg)', background: '#000', maxHeight: '55vh', objectFit: 'cover',
+              width: '100%', borderRadius: 'var(--radius-lg)', background: '#000', maxHeight: '42vh', objectFit: 'cover',
             }} />
             <canvas ref={canvasRef} style={{ display: 'none' }} />
+            {cameraError && <div className="permission-help">{cameraError}</div>}
+            <label className="attendance-proof-upload">
+              <VectorIcon name="paperclip" size={16} />
+              <span>Upload a JPG or PNG (max 2 MB)</span>
+              <input type="file" accept="image/jpeg,image/png" capture="environment" onChange={handleProofUpload} />
+            </label>
             <div className="modal-actions grid-2 attendance-modal-actions" style={{ marginTop: '1rem' }}>
-              <button onClick={() => { stopCamera(); setCurrentAction(null); }}
+              <button type="button" onClick={cancelAttendanceCapture}
                 className="action-btn action-btn-gray" style={{ padding: '0.875rem' }}>Cancel</button>
-              <button onClick={captureSelfie} className="btn-primary" style={{ margin: 0 }}><span className="icon-label"><VectorIcon name="camera" size={17} /> Capture</span></button>
+              <button type="button" onClick={captureSelfie} className="btn-primary" style={{ margin: 0 }} disabled={Boolean(cameraError)}>
+                <span className="icon-label"><VectorIcon name="camera" size={17} /> Take photo</span>
+              </button>
             </div>
           </div>
         </div>
@@ -738,14 +853,15 @@ const { coords, distance, isInside, accuracy, matchedLocation } = useLocation(
           <div className="modal-content attendance-modal-content">
             <div className="modal-handle" />
             <div className="modal-title">Confirm {currentAction === 'in' ? 'Time In' : 'Time Out'}</div>
-            <img src={capturedSelfie} alt="selfie" style={{ width: '100%', borderRadius: 'var(--radius-lg)', marginBottom: '0.75rem' }} />
+            <img src={capturedSelfie} alt="Company attendance proof" style={{ width: '100%', borderRadius: 'var(--radius-lg)', marginBottom: '0.75rem' }} />
             {gpsCoords && (
               <p style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginBottom: '1rem' }}>
-                {gpsCoords.latitude.toFixed(5)}, {gpsCoords.longitude.toFixed(5)}
+                Recorded location ±{Math.round(gpsCoords.accuracy)}m · this pin cannot be moved
               </p>
             )}
+            {submitError && <div className="permission-help attendance-submit-error" role="alert">{submitError}</div>}
             <div className="modal-actions grid-2 attendance-modal-actions">
-              <button onClick={() => { setCapturedSelfie(null); setCurrentAction(null); }}
+              <button type="button" onClick={() => { setCapturedSelfie(null); openProofCapture(); }}
                 className="action-btn action-btn-gray" style={{ padding: '0.875rem' }}>Retake</button>
               <button onClick={handleSubmitAction} disabled={actionLoading}
                 className="btn-primary" style={{ margin: 0 }}>

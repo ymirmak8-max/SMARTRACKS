@@ -417,7 +417,7 @@ L.default.Icon.Default.mergeOptions({
         <div>
           <div className="section-title">Live Map</div>
           <div className="section-sub">
-            {onlineCount > 0 ? `${onlineCount} student${onlineCount !== 1 ? 's' : ''} online` : 'No students online'}
+            {onlineCount > 0 ? `${onlineCount} student${onlineCount !== 1 ? 's' : ''} timed in or online` : 'No students timed in'}
             {lastUpdated && ` • Updated ${formatTime(lastUpdated)}`}
           </div>
         </div>
@@ -576,15 +576,15 @@ L.default.Icon.Default.mergeOptions({
         <div className="card-title">
           Online Students
           <span style={{ marginLeft: '0.5rem', fontWeight: 400, color: 'var(--text-3)', fontSize: '0.82rem' }}>
-            (last 5 minutes)
+            (timed in or recently online)
           </span>
         </div>
 
         {liveLocations.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>
             <div style={{ color: 'var(--text-3)', marginBottom: '0.5rem' }}><VectorIcon name="map" size={30} /></div>
-            <p style={{ fontSize: '0.875rem' }}>No students online right now.</p>
-            <p style={{ fontSize: '0.78rem', marginTop: '0.25rem' }}>Students appear here when they open the app with GPS enabled.</p>
+            <p style={{ fontSize: '0.875rem' }}>No students timed in right now.</p>
+            <p style={{ fontSize: '0.78rem', marginTop: '0.25rem' }}>Students appear here after they time in. Their location is recorded automatically from their device.</p>
           </div>
         ) : liveLocations.map(loc => {
           const isClockedIn = loc.clock_in && !loc.clock_out;

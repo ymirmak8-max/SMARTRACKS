@@ -248,7 +248,7 @@ CREATE TABLE system_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 INSERT INTO system_settings (key, value) VALUES ('attendance_privacy', '{"imageRetentionDays":90}'::jsonb);
-INSERT INTO system_settings (key, value) VALUES ('attendance_policy', '{"selfieRequired":true,"maximumGpsAccuracyMeters":50,"unpaidBreakMinutes":60,"maximumCreditedHours":8,"offlineSubmissionHours":24,"correctionApprover":"coordinator_or_admin"}'::jsonb);
+INSERT INTO system_settings (key, value) VALUES ('attendance_policy', '{"selfieRequired":true,"maximumGpsAccuracyMeters":100,"unpaidBreakMinutes":60,"maximumCreditedHours":8,"offlineSubmissionHours":24,"correctionApprover":"coordinator_or_admin"}'::jsonb);
 INSERT INTO system_settings (key, value) VALUES ('privacy_notice', '{
   "version":"2026-07-28.2",
   "controllerName":"The school or institution operating this Smartrack deployment",

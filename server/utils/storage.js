@@ -12,12 +12,54 @@ const MIME_EXTENSIONS = {
 };
 
 const parseDataUrl = (value) => {
-  const match = /^data:([^;,]+);base64,([\s\S]+)$/.exec(value || '');
+  const match = /^data:([^;,]+)(?:;charset=[^;,]+)?;base64,([\s\S]+)$/i.exec(value || '');
   if (!match) throw Object.assign(new Error('The uploaded file is invalid.'), { status: 400 });
   const encoded = match[2].replace(/\s/g, '');
   if (!encoded || !/^[a-zA-Z0-9+/]+={0,2}$/.test(encoded))
     throw Object.assign(new Error('The uploaded file is invalid.'), { status: 400 });
-  return { mime: match[1].toLowerCase(), buffer: Buffer.from(encoded, 'base64') };
+  const mime = match[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : match[1].toLowerCase();
+  return { mime, buffer: Buffer.from(encoded, 'base64') };
+};
+
+const storageHeaders = (serviceKey, json = false) => ({
+  Authorization: `Bearer ${serviceKey}`,
+  apikey: serviceKey,
+  ...(json ? { 'Content-Type': 'application/json' } : {}),
+});
+
+let bucketReady = null;
+const ensureStorageBucket = async (supabaseUrl, serviceKey, bucket) => {
+  if (bucketReady) return bucketReady;
+  bucketReady = (async () => {
+    const existing = await fetch(`${supabaseUrl}/storage/v1/bucket/${encodeURIComponent(bucket)}`, {
+      headers: storageHeaders(serviceKey),
+    });
+    if (existing.ok) return;
+    const created = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+      method: 'POST',
+      headers: storageHeaders(serviceKey, true),
+      body: JSON.stringify({
+        id: bucket,
+        name: bucket,
+        public: false,
+        file_size_limit: 10 * 1024 * 1024,
+        allowed_mime_types: [
+          'image/jpeg', 'image/jpg', 'image/png',
+          'application/pdf', 'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ],
+      }),
+    });
+    if (!created.ok && created.status !== 409) {
+      const detail = await created.text().catch(() => '');
+      console.error('Unable to create storage bucket:', created.status, detail);
+      throw new Error('File storage is not ready.');
+    }
+  })().catch((error) => {
+    bucketReady = null;
+    throw error;
+  });
+  return bucketReady;
 };
 
 const hasExpectedSignature = (mime, buffer) => {
@@ -34,7 +76,7 @@ const hasExpectedSignature = (mime, buffer) => {
 const sanitizeImage = async (mime, buffer) => {
   try {
     const image = sharp(buffer, {
-      failOn: 'warning',
+      failOn: 'error',
       limitInputPixels: 25_000_000,
       sequentialRead: true,
     }).rotate();
@@ -91,10 +133,7 @@ export const persistUpload = async (value, { folder, ownerId, allowedTypes, maxB
     await scanForMalware(buffer, MIME_EXTENSIONS[mime] || 'bin');
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, '');
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || DEFAULT_STORAGE_BUCKET;
-  if (!supabaseUrl || !serviceKey) {
+  const storeInDatabase = async () => {
     const { default: pool } = await import('../config/db.js');
     const stored = await pool.query(
       `INSERT INTO stored_files (owner_id, mime_type, content, byte_size)
@@ -103,14 +142,24 @@ export const persistUpload = async (value, { folder, ownerId, allowedTypes, maxB
       [ownerId, mime, buffer, buffer.length]
     );
     return createFileToken({ backend: 'database', fileId: stored.rows[0].id });
-  }
+  };
+
+  const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, '');
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || DEFAULT_STORAGE_BUCKET;
+  if (!supabaseUrl || !serviceKey) return storeInDatabase();
+  try { await ensureStorageBucket(supabaseUrl, serviceKey, bucket); }
+  catch { /* Upload may still succeed, otherwise the database copy is used. */ }
   const objectPath = `${folder}/${ownerId}/${Date.now()}-${crypto.randomUUID()}.${MIME_EXTENSIONS[mime]}`;
   const response = await fetch(`${supabaseUrl}/storage/v1/object/${bucket}/${objectPath}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey, 'Content-Type': mime, 'x-upsert': 'false' },
+    headers: { ...storageHeaders(serviceKey), 'Content-Type': mime, 'x-upsert': 'false' },
     body: buffer,
   });
-  if (!response.ok) throw new Error(`Cloud storage rejected the upload (${response.status}).`);
+  if (!response.ok) {
+    console.error('Cloud storage upload failed:', response.status, await response.text().catch(() => ''));
+    return storeInDatabase();
+  }
   return createFileToken({ backend: 'supabase', bucket, objectPath });
 };
 

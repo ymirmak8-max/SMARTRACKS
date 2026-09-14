@@ -140,7 +140,7 @@ export const runImageCleanup = async (req, res) => {
 
 const DEFAULT_ATTENDANCE_POLICY = {
   selfieRequired: true,
-  maximumGpsAccuracyMeters: 50,
+  maximumGpsAccuracyMeters: 100,
   unpaidBreakMinutes: 60,
   maximumCreditedHours: 8,
   offlineSubmissionHours: 24,
@@ -150,8 +150,10 @@ const DEFAULT_ATTENDANCE_POLICY = {
 export const getAttendancePolicy = async (_req, res) => {
   try {
     const result = await pool.query("SELECT value, updated_at FROM system_settings WHERE key = 'attendance_policy'");
-    return res.status(200).json({ policy: { ...DEFAULT_ATTENDANCE_POLICY, ...(result.rows[0]?.value || {}) },
-      updatedAt: result.rows[0]?.updated_at || null });
+    const policy = { ...DEFAULT_ATTENDANCE_POLICY, ...(result.rows[0]?.value || {}) };
+    const meters = Number(policy.maximumGpsAccuracyMeters);
+    policy.maximumGpsAccuracyMeters = Number.isFinite(meters) ? Math.max(100, meters) : 100;
+    return res.status(200).json({ policy, updatedAt: result.rows[0]?.updated_at || null });
   } catch {
     return res.status(500).json({ message: 'Unable to load attendance policy.' });
   }

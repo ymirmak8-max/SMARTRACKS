@@ -28,7 +28,7 @@ const SystemHealthPanel = () => {
   const [events, setEvents] = useState([]);
   const [backups, setBackups] = useState(null);
   const [policy, setPolicy] = useState({
-    selfieRequired: true, maximumGpsAccuracyMeters: 50, unpaidBreakMinutes: 60,
+    selfieRequired: true, maximumGpsAccuracyMeters: 100, unpaidBreakMinutes: 60,
     maximumCreditedHours: 8, offlineSubmissionHours: 24,
   });
   const load = useCallback(async () => {
@@ -102,7 +102,7 @@ const SystemHealthPanel = () => {
           <div className="card" style={{ marginTop: '0.875rem' }}>
             <div className="card-title">Attendance policy</div>
             <div className="grid-2">
-              <div className="form-group"><label>Maximum GPS error (meters)</label><input type="number" min="10" max="100" value={policy.maximumGpsAccuracyMeters} onChange={event => setPolicy({ ...policy, maximumGpsAccuracyMeters: Number(event.target.value) })} /></div>
+              <div className="form-group"><label>Preferred GPS accuracy (meters)</label><input type="number" min="10" max="100" value={policy.maximumGpsAccuracyMeters} onChange={event => setPolicy({ ...policy, maximumGpsAccuracyMeters: Number(event.target.value) })} /><small>Fixes worse than this are still recorded and flagged for review. Unusable fixes above ±250m are rejected.</small></div>
               <div className="form-group"><label>Unpaid break (minutes)</label><input type="number" min="0" max="180" value={policy.unpaidBreakMinutes} onChange={event => setPolicy({ ...policy, unpaidBreakMinutes: Number(event.target.value) })} /></div>
               <div className="form-group"><label>Maximum credited hours/day</label><input type="number" min="1" max="24" step="0.5" value={policy.maximumCreditedHours} onChange={event => setPolicy({ ...policy, maximumCreditedHours: Number(event.target.value) })} /></div>
               <div className="form-group"><label>Offline review threshold (hours)</label><input type="number" min="1" max="168" value={policy.offlineSubmissionHours} onChange={event => setPolicy({ ...policy, offlineSubmissionHours: Number(event.target.value) })} /></div>

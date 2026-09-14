@@ -59,6 +59,7 @@ const useLocation = (officeLat, officeLng, radiusMeters, onExitPerimeter, isCloc
   const positionsRef = useRef([]);
   const stablePositionRef = useRef(null);
   const onExitRef = useRef(onExitPerimeter);
+  const hasFixRef = useRef(false);
 
   useEffect(() => {
     onExitRef.current = onExitPerimeter;
@@ -90,8 +91,8 @@ const useLocation = (officeLat, officeLng, radiusMeters, onExitPerimeter, isCloc
         const rawAcc = pos.coords.accuracy;
         const timestamp = pos.timestamp;
 
-        // Skip if accuracy is very poor (> 200m)
-        if (rawAcc > 200) return;
+        // Skip only unusable city-scale estimates.
+        if (rawAcc > 400) return;
 
         // Apply Kalman filter for smoother coordinates
         const filtered = kalmanRef.current.process(rawLat, rawLng, rawAcc, timestamp);
@@ -116,6 +117,7 @@ const useLocation = (officeLat, officeLng, radiusMeters, onExitPerimeter, isCloc
         }
         const stable = stablePositionRef.current;
 
+        hasFixRef.current = true;
         setCoords({ latitude: stable.latitude, longitude: stable.longitude, accuracy: rawAcc });
         setAccuracy(Math.round(rawAcc));
         setError(null);
@@ -171,14 +173,15 @@ const useLocation = (officeLat, officeLng, radiusMeters, onExitPerimeter, isCloc
         }
       },
       (err) => {
+        if (err.code === 3 && hasFixRef.current) return;
         if (err.code === 1) setError('GPS access denied. Please allow location.');
         else if (err.code === 2) setError('GPS position unavailable. Please try again.');
-        else setError('GPS timeout. Please check your settings.');
+        else setError('GPS request timed out. Check location services and try again.');
       },
       {
         enableHighAccuracy: true,
-        maximumAge: 0,         // Always get fresh position
-        timeout: 10000,
+        maximumAge: 3000,
+        timeout: 45000,
       }
     );
 

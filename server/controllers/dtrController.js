@@ -45,11 +45,48 @@ const getBusinessDate = (value = new Date()) => new Intl.DateTimeFormat('en-CA',
   day: '2-digit',
 }).format(value);
 
-const DEFAULT_POLICY = { selfieRequired: true, maximumGpsAccuracyMeters: 50, unpaidBreakMinutes: 60,
+const findTodayRecord = async (studentId, today = getBusinessDate()) => {
+  const result = await pool.query(
+    `SELECT * FROM time_records
+     WHERE student_id = $1
+       AND (
+         date = $2::date
+         OR (clock_in AT TIME ZONE 'Asia/Manila')::date = $2::date
+       )
+     ORDER BY clock_in DESC NULLS LAST
+     LIMIT 1`,
+    [studentId, today]
+  );
+  return result.rows[0] || null;
+};
+
+const alreadyTimedInPayload = (record) => ({
+  message: 'You are already timed in today.',
+  record,
+  isValid: record.is_valid,
+  anomalyFlag: record.anomaly_flag,
+  alreadyRecorded: true,
+  receipt: {
+    receiptId: record.clock_in_submission_id,
+    action: 'clock_in',
+    serverReceivedAt: record.clock_in_received_at,
+    capturedAt: record.clock_in,
+    worksite: null,
+    gpsAccuracy: null,
+    status: record.is_valid ? 'accepted' : 'flagged',
+  },
+});
+
+const DEFAULT_POLICY = { selfieRequired: true, maximumGpsAccuracyMeters: 100, unpaidBreakMinutes: 60,
   maximumCreditedHours: 8, offlineSubmissionHours: 24 };
+const GPS_RECORDING_LIMIT_METERS = 250;
+const appendAnomaly = (current, next) => (current ? `${current} | ${next}` : next);
 const getAttendancePolicy = async () => {
   const result = await pool.query("SELECT value FROM system_settings WHERE key = 'attendance_policy'").catch(() => ({ rows: [] }));
-  return { ...DEFAULT_POLICY, ...(result.rows[0]?.value || {}) };
+  const policy = { ...DEFAULT_POLICY, ...(result.rows[0]?.value || {}) };
+  const meters = Number(policy.maximumGpsAccuracyMeters);
+  policy.maximumGpsAccuracyMeters = Number.isFinite(meters) ? Math.max(100, meters) : 100;
+  return policy;
 };
 
 const parseSubmissionMetadata = (clientCapturedAt, submissionId, policy) => {
@@ -88,7 +125,14 @@ const getDeploymentWithLocations = async (studentId) => {
     WHERE d.student_id=$1 AND d.status='active'
     GROUP BY d.id, c.id
   `, [studentId]);
-  return result.rows[0] || null;
+  const deployment = result.rows[0];
+  if (!deployment) return null;
+  if (typeof deployment.locations === 'string') {
+    try { deployment.locations = JSON.parse(deployment.locations); }
+    catch { deployment.locations = []; }
+  }
+  if (!Array.isArray(deployment.locations)) deployment.locations = [];
+  return deployment;
 };
 
 export const classifyWorksitePosition = (locations, coordinates, accuracy = 0) => {
@@ -155,17 +199,14 @@ export const clockIn = async (req, res) => {
     if (!coordinates)
       return res.status(400).json({ message: 'Valid GPS coordinates are required.' });
     if (policy.selfieRequired && !selfieUrl) return res.status(400).json({ message: 'A selfie is required.' });
-    if (!Number.isFinite(Number(accuracy)) || Number(accuracy) < 0 || Number(accuracy) > Number(policy.maximumGpsAccuracyMeters))
-      return res.status(400).json({ message: `GPS accuracy must be ${policy.maximumGpsAccuracyMeters} meters or better.` });
+    if (!Number.isFinite(Number(accuracy)) || Number(accuracy) < 0 || Number(accuracy) > GPS_RECORDING_LIMIT_METERS)
+      return res.status(400).json({ message: `GPS is too vague (±${Math.round(Number(accuracy) || 0)}m). A position within ±${GPS_RECORDING_LIMIT_METERS}m is required.` });
     const submission = parseSubmissionMetadata(clientCapturedAt, submissionId, policy);
     if (!submission) return res.status(400).json({ message: 'Valid attendance capture metadata is required.' });
 
     const duplicate = await pool.query('SELECT * FROM time_records WHERE clock_in_submission_id = $1', [submissionId]);
     if (duplicate.rows.length)
       return res.status(200).json({ message: 'Time-in already synchronized.', record: duplicate.rows[0], isValid: duplicate.rows[0].is_valid, anomalyFlag: duplicate.rows[0].anomaly_flag });
-    if (!await consumeAttendanceChallenge(studentId, 'clock_in', attendanceChallenge))
-      return res.status(409).json({ code: 'ATTENDANCE_CHALLENGE_INVALID',
-        message: 'The attendance verification expired or was already used. Start the time-in process again.' });
 
     const dep = await getDeploymentWithLocations(studentId);
     if (!dep)
@@ -174,13 +215,9 @@ export const clockIn = async (req, res) => {
       return res.status(423).json({ message: 'This completed deployment is locked.' });
 
     const today = getBusinessDate(submission.capturedAt);
-    const existing = await pool.query(
-      `SELECT * FROM time_records WHERE student_id = $1 AND date = $2`,
-      [studentId, today]
-    );
-
-    if (existing.rows.length > 0 && existing.rows[0].clock_in)
-      return res.status(400).json({ message: 'You have already timed in today.' });
+    const existing = await findTodayRecord(studentId, today);
+    if (existing?.clock_in)
+      return res.status(200).json(alreadyTimedInPayload(existing));
 
     let isValid = true;
     let anomalyFlag = null;
@@ -205,34 +242,55 @@ export const clockIn = async (req, res) => {
           ? `Time-in outside approved worksites (${Math.round(worksite.nearest.distance)}m from ${worksite.nearest.name})`
           : 'Time-in has no configured approved worksite';
     }
+    if (Number(accuracy) > Number(policy.maximumGpsAccuracyMeters)) {
+      isValid = false;
+      anomalyFlag = appendAnomaly(anomalyFlag,
+        `Low GPS accuracy (+/-${Math.round(Number(accuracy))}m). The device location was still recorded.`);
+    }
 
     const storedSelfieUrl = await persistUpload(selfieUrl, {
       folder: 'attendance/selfies', ownerId: studentId, allowedTypes: IMAGE_TYPES, maxBytes: 3 * 1024 * 1024,
     });
-    const result = await pool.query(
-      `INSERT INTO time_records 
-       (deployment_id, student_id, clock_in, clock_in_device_at, clock_in_received_at,
-        clock_in_submission_id, clock_in_lat, clock_in_lng, selfie_in_url,
-        is_valid, anomaly_flag, date, is_late, late_minutes, clock_in_location_id)
-       VALUES ($1, $2, $3, $3, NOW(), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-       RETURNING *`,
-      [dep.id, studentId, submission.capturedAt, submissionId, coordinates.latitude, coordinates.longitude,
-       storedSelfieUrl, isValid, anomalyFlag, today, isLate, lateMinutes, (worksite.matched || worksite.uncertain)?.id || null]
-    );
+    const worksiteId = (worksite.matched || worksite.uncertain)?.id || null;
+    const result = existing
+      ? await pool.query(
+        `UPDATE time_records
+         SET deployment_id = $1, clock_in = $2, clock_in_device_at = $2, clock_in_received_at = NOW(),
+             clock_in_submission_id = $3, clock_in_lat = $4, clock_in_lng = $5, selfie_in_url = $6,
+             is_valid = $7, anomaly_flag = $8, is_late = $9, late_minutes = $10, clock_in_location_id = $11
+         WHERE id = $12 AND clock_in IS NULL
+         RETURNING *`,
+        [dep.id, submission.capturedAt, submissionId, coordinates.latitude, coordinates.longitude,
+         storedSelfieUrl, isValid, anomalyFlag, isLate, lateMinutes, worksiteId, existing.id]
+      )
+      : await pool.query(
+        `INSERT INTO time_records
+         (deployment_id, student_id, clock_in, clock_in_device_at, clock_in_received_at,
+          clock_in_submission_id, clock_in_lat, clock_in_lng, selfie_in_url,
+          is_valid, anomaly_flag, date, is_late, late_minutes, clock_in_location_id)
+         VALUES ($1, $2, $3, $3, NOW(), $4, $5, $6, $7, $8, $9, $10::date, $11, $12, $13)
+         RETURNING *`,
+        [dep.id, studentId, submission.capturedAt, submissionId, coordinates.latitude, coordinates.longitude,
+         storedSelfieUrl, isValid, anomalyFlag, today, isLate, lateMinutes, worksiteId]
+      );
+    const saved = result.rows[0] || await findTodayRecord(studentId, today);
+    if (!saved?.clock_in)
+      return res.status(409).json({ message: 'Time-in could not be saved. Please try again.' });
+    await consumeAttendanceChallenge(studentId, 'clock_in', attendanceChallenge).catch(() => false);
 
     await publishLiveLocation(studentId, coordinates, accuracy, true).catch(error =>
       console.error('Failed to publish live location after time-in:', error));
 
     await writeAuditLog({ actorId: studentId, action: 'attendance.clock_in', entityType: 'time_record',
-      entityId: result.rows[0].id, details: { isValid, anomalyFlag, isLate, lateMinutes,
-        worksiteId: (worksite.matched || worksite.uncertain)?.id || null, geofenceState: worksite.state }, req });
+      entityId: saved.id, details: { isValid, anomalyFlag, isLate, lateMinutes,
+        worksiteId, geofenceState: worksite.state }, req });
     if (anomalyFlag) await notifyAttendanceAnomaly(studentId, anomalyFlag);
 
     return res.status(201).json({
       message: isValid ? 'Timed in successfully.' : worksite.state === 'uncertain'
         ? 'Timed in and sent for review because GPS uncertainty overlaps the worksite boundary.'
         : 'Timed in but flagged - outside office perimeter.',
-      record: result.rows[0],
+      record: saved,
       isValid,
       anomalyFlag,
       isLate,
@@ -240,8 +298,8 @@ export const clockIn = async (req, res) => {
       receipt: {
         receiptId: submissionId,
         action: 'clock_in',
-        serverReceivedAt: result.rows[0].clock_in_received_at,
-        capturedAt: result.rows[0].clock_in,
+        serverReceivedAt: saved.clock_in_received_at,
+        capturedAt: saved.clock_in,
         worksite: (worksite.matched || worksite.uncertain)?.name || null,
         gpsAccuracy: Number(accuracy),
         status: isValid ? 'accepted' : 'flagged',
@@ -249,9 +307,13 @@ export const clockIn = async (req, res) => {
     });
   } catch (err) {
     console.error('Clock-in error:', err);
-    if (err.code === '23505')
-      return res.status(409).json({ message: 'You have already timed in today.' });
-    return res.status(err.status || 500).json({ message: err.status ? err.message : 'Failed to time in.' });
+    if (err.code === '23505') {
+      const recorded = await findTodayRecord(req.user.id).catch(() => null);
+      if (recorded?.clock_in) return res.status(200).json(alreadyTimedInPayload(recorded));
+    }
+    return res.status(err.status || 500).json({
+      message: err.status && err.message ? err.message : 'Failed to time in. Please try again.',
+    });
   }
 };
 
@@ -266,8 +328,8 @@ export const clockOut = async (req, res) => {
     if (!coordinates)
       return res.status(400).json({ message: 'Valid GPS coordinates are required.' });
     if (policy.selfieRequired && !selfieUrl) return res.status(400).json({ message: 'A selfie is required.' });
-    if (!Number.isFinite(Number(accuracy)) || Number(accuracy) < 0 || Number(accuracy) > Number(policy.maximumGpsAccuracyMeters))
-      return res.status(400).json({ message: `GPS accuracy must be ${policy.maximumGpsAccuracyMeters} meters or better.` });
+    if (!Number.isFinite(Number(accuracy)) || Number(accuracy) < 0 || Number(accuracy) > GPS_RECORDING_LIMIT_METERS)
+      return res.status(400).json({ message: `GPS is too vague (±${Math.round(Number(accuracy) || 0)}m). A position within ±${GPS_RECORDING_LIMIT_METERS}m is required.` });
     const submission = parseSubmissionMetadata(clientCapturedAt, submissionId, policy);
     if (!submission) return res.status(400).json({ message: 'Valid attendance capture metadata is required.' });
 
@@ -279,19 +341,15 @@ export const clockOut = async (req, res) => {
         message: 'The attendance verification expired or was already used. Start the time-out process again.' });
 
     const today = getBusinessDate(submission.capturedAt);
+    const existingRecord = await findTodayRecord(studentId, today);
 
-    const existing = await pool.query(
-      `SELECT * FROM time_records WHERE student_id = $1 AND date = $2`,
-      [studentId, today]
-    );
-
-    if (existing.rows.length === 0 || !existing.rows[0].clock_in)
+    if (!existingRecord?.clock_in)
       return res.status(400).json({ message: 'No time-in record was found for today.' });
 
-    if (existing.rows[0].clock_out)
+    if (existingRecord.clock_out)
       return res.status(400).json({ message: 'You have already timed out today.' });
 
-    const record = existing.rows[0];
+    const record = existingRecord;
 
     const clockOutTime = submission.capturedAt;
 
@@ -319,6 +377,11 @@ export const clockOut = async (req, res) => {
             ? `Time-out outside approved worksites (${Math.round(worksite.nearest.distance)}m from ${worksite.nearest.name})`
             : 'Time-out has no configured approved worksite');
       }
+    }
+    if (Number(accuracy) > Number(policy.maximumGpsAccuracyMeters)) {
+      isValid = false;
+      anomalyFlag = appendAnomaly(anomalyFlag,
+        `Low GPS accuracy (+/-${Math.round(Number(accuracy))}m). The device location was still recorded.`);
     }
 
     const hours = calculateCreditedHours({
@@ -384,12 +447,7 @@ export const clockOut = async (req, res) => {
 // GET /api/dtr/today
 export const getTodayRecord = async (req, res) => {
   try {
-    const today = getBusinessDate();
-    const result = await pool.query(
-      `SELECT * FROM time_records WHERE student_id = $1 AND date = $2`,
-      [req.user.id, today]
-    );
-    return res.status(200).json({ record: result.rows[0] || null });
+    return res.status(200).json({ record: await findTodayRecord(req.user.id) });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to fetch today record.' });
   }
@@ -457,19 +515,12 @@ export const flagPerimeterExit = async (req, res) => {
     const coordinates = parseCoordinates(latitude, longitude);
     const parsedAccuracy = Number(accuracy);
     const policy = await getAttendancePolicy();
-    if (!coordinates || !Number.isFinite(parsedAccuracy) || parsedAccuracy < 0 || parsedAccuracy > Number(policy.maximumGpsAccuracyMeters))
-      return res.status(400).json({ message: `A current GPS position with accuracy of ${policy.maximumGpsAccuracyMeters} meters or better is required.` });
+    if (!coordinates || !Number.isFinite(parsedAccuracy) || parsedAccuracy < 0 || parsedAccuracy > GPS_RECORDING_LIMIT_METERS)
+      return res.status(400).json({ message: `A current GPS position within ±${GPS_RECORDING_LIMIT_METERS}m is required.` });
   
-    // Only flag if student is currently clocked in
-    const existing = await pool.query(
-      `SELECT * FROM time_records WHERE student_id = $1 AND date = $2`,
-      [studentId, today]
-    );
-
-    if (existing.rows.length === 0 || !existing.rows[0].clock_in || existing.rows[0].clock_out)
+    const record = await findTodayRecord(studentId, today);
+    if (!record?.clock_in || record.clock_out)
       return res.status(200).json({ message: 'Not timed in; no flag is needed.' });
-
-    const record = existing.rows[0];
     const deployment = await getDeploymentWithLocations(studentId);
     if (!deployment?.locations?.length)
       return res.status(409).json({ message: 'The deployment geofence is not configured.' });

@@ -1,8 +1,17 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { uploadProfilePicture, removeProfilePicture } from '../../api/profile';
+import api from '../../api/axios';
 import useAuth from '../../hooks/useAuth';
 
 const MAX_BYTES = 2 * 1024 * 1024;
+const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+
+const fileApiPath = (src) => {
+  if (!src) return null;
+  if (src.startsWith('data:') || src.startsWith('blob:') || /^https?:\/\//i.test(src)) return src;
+  if (src.includes('/files/')) return `/files/${src.split('/files/').pop()}`;
+  return src.startsWith('/api/') ? src.slice(4) : src;
+};
 
 const readAsDataUrl = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -12,12 +21,44 @@ const readAsDataUrl = (file) => new Promise((resolve, reject) => {
 });
 
 const UserAvatar = ({ src, initials, size = 64, className = '' }) => {
+  const [displaySrc, setDisplaySrc] = useState(null);
   const [failed, setFailed] = useState(false);
-  const showImage = src && !failed;
+
+  useEffect(() => {
+    let objectUrl;
+    let cancelled = false;
+    setFailed(false);
+    setDisplaySrc(null);
+    if (!src) return undefined;
+
+    const load = async () => {
+      const path = fileApiPath(src);
+      if (!path) return;
+      if (path.startsWith('data:') || path.startsWith('blob:') || /^https?:\/\//i.test(path)) {
+        if (!cancelled) setDisplaySrc(path);
+        return;
+      }
+      try {
+        const response = await api.get(path, { responseType: 'blob' });
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(response.data);
+        setDisplaySrc(objectUrl);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [src]);
+
+  const showImage = displaySrc && !failed;
   return (
     <div className={`profile-avatar ${className}`.trim()} style={{ width: size, height: size }} aria-hidden="true">
       {showImage ? (
-        <img src={src} alt="" onError={() => setFailed(true)} />
+        <img src={displaySrc} alt="" onError={() => setFailed(true)} />
       ) : (
         <span>{initials || '?'}</span>
       )}
@@ -39,7 +80,8 @@ const ProfileAvatar = ({ initials, size = 64, onToast }) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!['image/jpeg', 'image/png'].includes(file.type))
+    const namedImage = /\.(jpe?g|png)$/i.test(file.name || '');
+    if (!ALLOWED_TYPES.includes(file.type) && !(file.type === '' && namedImage))
       return onToast?.('Use a JPG or PNG photo.', 'error');
     if (file.size > MAX_BYTES)
       return onToast?.('Photo must be smaller than 2 MB.', 'error');
