@@ -3,9 +3,20 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
   withCredentials: true,
+  timeout: 40000,
 });
 
+const requestPath = (config) => `${config?.baseURL || ''}${config?.url || ''}`;
+const isAuthApiRequest = (config) => /\/auth(\/|\?|$)/.test(config?.url || '') || /\/auth(\/|\?|$)/.test(requestPath(config));
+const isPublicAuthRequest = (config) =>
+  /\/auth\/(login|register|refresh|forgot-password|reset-password|mfa\/verify)(\?|$)/.test(config?.url || '')
+  || /\/auth\/(login|register|refresh|forgot-password|reset-password|mfa\/verify)(\?|$)/.test(requestPath(config));
+
 api.interceptors.request.use((config) => {
+  if (isPublicAuthRequest(config)) {
+    if (config.headers) delete config.headers.Authorization;
+    return config;
+  }
   const token = sessionStorage.getItem('accessToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
@@ -38,7 +49,7 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
-    const isAuthRequest = originalRequest?.url?.startsWith('/auth/');
+    const isAuthRequest = isAuthApiRequest(originalRequest);
 
     if (status === 403 && error.response?.data?.code === 'ADMIN_MFA_REQUIRED') {
       window.dispatchEvent(new Event('smartrack:admin-mfa-required'));

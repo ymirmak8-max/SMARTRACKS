@@ -137,7 +137,8 @@ app.get('/api/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
     res.status(200).json({ status: 'ok', database: 'connected', timestamp: new Date().toISOString() });
-  } catch {
+  } catch (error) {
+    logger.error('Health database check failed', { error });
     res.status(503).json({ status: 'unavailable', database: 'disconnected', timestamp: new Date().toISOString() });
   }
 });

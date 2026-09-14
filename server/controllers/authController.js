@@ -54,7 +54,8 @@ const issueSession = async (user, res) => {
 // POST /api/auth/login
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = String(req.body.email || '').trim();
+    const password = String(req.body.password || '');
     if (!email || !password)
       return res.status(400).json({ message: 'Email and password are required.' });
 
@@ -78,7 +79,7 @@ export const login = async (req, res) => {
         process.env.JWT_SECRET,
         { expiresIn: '5m' }
       );
-      return res.status(202).json({ mfaRequired: true, challengeToken });
+      return res.status(200).json({ mfaRequired: true, challengeToken });
     }
     const session = await issueSession(user, res);
     await writeAuditLog({ actorId: user.id, action: 'auth.login', entityType: 'user', entityId: user.id, req });
@@ -86,6 +87,8 @@ export const login = async (req, res) => {
     return res.status(200).json(session);
   } catch (err) {
     console.error('Login error:', err);
+    if (err.code === 'ENOTFOUND' || err.status === 502 || /fetch failed|Database request failed/i.test(err.message || ''))
+      return res.status(503).json({ message: 'The sign-in service is temporarily unavailable. Try again in a moment.' });
     return res.status(500).json({ message: 'Server error during login.' });
   }
 };
