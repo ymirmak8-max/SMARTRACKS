@@ -22,6 +22,7 @@ import auditRoutes from './routes/auditRoutes.js';
 import exportRoutes from './routes/exportRoutes.js';
 import systemRoutes from './routes/systemRoutes.js';
 import completionRoutes from './routes/completionRoutes.js';
+import dailyTaskRoutes from './routes/dailyTaskRoutes.js';
 import { deliverNotification } from './controllers/notificationController.js';
 import { processNotificationOutbox, startNotificationWorker, stopNotificationWorker } from './utils/notificationOutbox.js';
 import { processScheduledReports, startReportProcessor, stopReportProcessor } from './utils/reportProcessor.js';
@@ -171,6 +172,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/exports', exportRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/completions', completionRoutes);
+app.use('/api/daily-tasks', dailyTaskRoutes);
 
 app.get('/api/cron/workers', async (req, res) => {
   const secret = process.env.CRON_SECRET?.trim();

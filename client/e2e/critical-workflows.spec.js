@@ -88,6 +88,14 @@ test('student login restores the correct dashboard and attendance state', async 
     required_documents: 1, approved_documents: 0, has_final_evaluation: false,
     ready: false, completion_status: 'not_requested',
   } }));
+  await page.route(/\/api\/daily-tasks(\/mine)?(\?|$)/, route => json(route, {
+    date: '2026-09-15',
+    tasks: [{
+      id: 'task-1', template_id: 'tpl-1', title: 'Submit work log', description: 'Log today’s duties',
+      status: 'missing', student_notes: null, excuse_remarks: null,
+    }],
+    counts: { missing: 1, in_progress: 0, completed: 0, excused: 0 },
+  }));
 
   await page.goto('/login');
   await page.getByLabel('Email address').fill('student@example.com');
@@ -100,12 +108,19 @@ test('student login restores the correct dashboard and attendance state', async 
   await expect(page.getByRole('button', { name: 'Time Out' })).toBeDisabled();
 
   const navigation = page.viewportSize().width <= 768 ? '.bottom-nav-item' : '.sidebar-item';
+  await expect(page.getByText("Today's tasks")).toBeVisible();
   await page.locator(navigation).filter({ hasText: 'Docs' }).click();
   await expect(page).toHaveURL(/view=documents/);
   await expect(page.getByText('No document requirements yet')).toBeVisible();
+  await page.locator(navigation).filter({ hasText: 'Tasks' }).click();
+  await expect(page).toHaveURL(/view=tasks/);
+  await expect(page.getByRole('heading', { name: 'Daily tasks' })).toBeVisible();
+  await expect(page.getByText('Submit work log')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start task' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mark completed' })).toBeVisible();
+  await expectResponsiveControls(page);
   await page.locator(navigation).filter({ hasText: 'Requests' }).click();
   await expect(page.getByRole('heading', { name: 'Leave & corrections' })).toBeVisible();
-  await expectResponsiveControls(page);
   await page.locator(navigation).filter({ hasText: 'Completion' }).click();
   await expect(page.getByRole('heading', { name: 'Completion status' })).toBeVisible();
   await expectResponsiveControls(page);
@@ -220,6 +235,14 @@ for (const dashboard of [
     await page.route('**/api/attendance-exceptions/calendar', route => json(route, { exceptions: [] }));
     await page.route('**/api/completions', route => json(route, { completions: [] }));
     await page.route('**/api/documents/requirements', route => json(route, { requirements: [] }));
+    await page.route(/\/api\/daily-tasks(\/mine)?(\?|$)/, route => json(route, {
+      date: '2026-09-15',
+      tasks: [{
+        id: 'assignment-1', template_id: 'template-1', title: 'Submit work log', description: '',
+        status: 'missing', first_name: 'Ana', last_name: 'Cruz', email: 'ana@example.edu',
+      }],
+      counts: { missing: 1, in_progress: 0, completed: 0, excused: 0 },
+    }));
 
     await page.goto(dashboard.path);
     await expect(page.getByRole('heading', { name: dashboard.heading })).toBeVisible();
@@ -233,12 +256,14 @@ for (const dashboard of [
       return page.getByRole('menuitem', { name: label, exact: true }).click();
     };
     if (dashboard.role === 'supervisor') {
+      await openNavigation('Tasks');
+      await expect(page.getByRole('heading', { name: 'Daily tasks' })).toBeVisible();
+      await expect(page.getByText('Ana Cruz')).toBeVisible();
+      await expect(page.getByText('missing', { exact: true })).toBeVisible();
       await openNavigation('Map');
       await expect(page.getByText('Live map', { exact: true })).toBeVisible();
-      await expectResponsiveControls(page);
-      await openNavigation('Attendance Review');
+      await openNavigation('Attendance');
       await expect(page.getByRole('heading', { name: 'Attendance Review Center' })).toBeVisible();
-      await expectResponsiveControls(page);
     } else {
       for (const view of [
         ['Insights', 'Insights'], ['Reviews', 'Review center'],

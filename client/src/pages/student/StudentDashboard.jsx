@@ -25,8 +25,9 @@ const ProfilePage = lazy(() => import('./ProfilePage'));
 const LocationMap = lazy(() => import('../../components/common/LocationMap'));
 const AttendanceExceptionsPage = lazy(() => import('../../components/common/AttendanceExceptionsPage'));
 const CompletionPanel = lazy(() => import('../../components/common/CompletionPanel'));
+const StudentDailyTasks = lazy(() => import('../../components/common/StudentDailyTasks'));
 const NO_WORKSITES = [];
-const STUDENT_VIEWS = ['dashboard', 'documents', 'attendance', 'completion', 'profile'];
+const STUDENT_VIEWS = ['dashboard', 'documents', 'tasks', 'attendance', 'completion', 'profile'];
 
 const formatDurationHours = value => {
   const hours = Number(value);
@@ -469,6 +470,7 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
   const NAV = [
     { key: 'dashboard', icon: <VectorIcon name="home" size={20} />, label: 'Home' },
     { key: 'documents', icon: <VectorIcon name="document" size={20} />, label: 'Docs' },
+    { key: 'tasks', icon: <VectorIcon name="clipboard" size={20} />, label: 'Tasks' },
     { key: 'attendance', icon: <VectorIcon name="calendar" size={20} />, label: 'Requests' },
     { key: 'completion', icon: <VectorIcon name="success" size={20} />, label: 'Completion' },
   ];
@@ -493,6 +495,8 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
         <WorkspacePane key={activePage}>
         {activePage === 'documents' ? (
           <Suspense fallback={<SkeletonPage variant="list" />}><DocumentsPage onBack={() => setActivePage('dashboard')} /></Suspense>
+        ) : activePage === 'tasks' ? (
+          <Suspense fallback={<SkeletonPage variant="list" />}><StudentDailyTasks onToast={showToast} /></Suspense>
         ) : activePage === 'attendance' ? (
           <Suspense fallback={<SkeletonPage variant="list" />}><AttendanceExceptionsPage /></Suspense>
         ) : activePage === 'completion' ? (
@@ -538,6 +542,10 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
                 <code style={{ fontSize: '.72rem', color: 'var(--text-3)' }}>{latestReceipt.receiptId}</code>
               </div>
             )}
+
+            <Suspense fallback={null}>
+              <StudentDailyTasks compact onToast={showToast} onOpenAll={() => setActivePage('tasks')} />
+            </Suspense>
 
             {/* Progress */}
             <div className="card">

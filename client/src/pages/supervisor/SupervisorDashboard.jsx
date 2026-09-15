@@ -18,6 +18,7 @@ import WorkspacePane from '../../components/common/WorkspacePane';
 import SkeletonPage from '../../components/common/Skeleton';
 import { getProfile } from '../../api/profile';
 import ProfileAvatar from '../../components/common/ProfileAvatar';
+import SupervisorDailyTasks from '../../components/common/SupervisorDailyTasks';
 
 const RUBRIC_CRITERIA = [
   { key: 'attitude', label: 'Work attitude & behavior', description: 'Punctuality, discipline, professionalism' },
@@ -29,7 +30,7 @@ const RUBRIC_CRITERIA = [
 ];
 
 const INITIAL_SCORES = RUBRIC_CRITERIA.reduce((acc, c) => ({ ...acc, [c.key]: 85 }), {});
-const SUPERVISOR_VIEWS = ['students', 'map', 'attendance', 'account'];
+const SUPERVISOR_VIEWS = ['students', 'map', 'attendance', 'tasks', 'account'];
 const SupervisorDashboard = () => {
   const { user } = useAuth();
 
@@ -131,6 +132,7 @@ const SupervisorDashboard = () => {
 
   const NAV = [
     { key: 'students', icon: <VectorIcon name="briefcase" size={20} />, label: 'Students', badge: pendingEvaluations },
+    { key: 'tasks', icon: <VectorIcon name="clipboard" size={20} />, label: 'Tasks' },
     { key: 'map', icon: <VectorIcon name="map" size={20} />, label: 'Map' },
     { key: 'attendance', icon: <VectorIcon name="calendar" size={20} />, label: 'Attendance' },
   ];
@@ -156,6 +158,8 @@ const SupervisorDashboard = () => {
         <WorkspacePane key={activeTab}>
         {activeTab === 'map' ? (
           <SupervisorLiveMap />
+        ) : activeTab === 'tasks' ? (
+          <SupervisorDailyTasks onToast={showToast} />
         ) : activeTab === 'attendance' ? (
           <AttendanceReviewCenter onToast={showToast} />
         ) : activeTab === 'account' ? (

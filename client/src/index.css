@@ -4476,7 +4476,7 @@ button, .action-btn, .btn-primary, .btn-compact-primary, .auth-submit {
 .card .btn-compact-primary {
   width: auto !important;
   flex: 0 0 auto !important;
-  min-height: 38px !important;
+  min-height: 44px !important;
   padding: 0.45rem 0.9rem !important;
   border-radius: 999px !important;
 }
@@ -5757,4 +5757,113 @@ button.profile-avatar-preview:focus-visible {
 .analytics-student-controls .student-typeahead,
 .attendance-review-toolbar .student-typeahead {
   width: 100%;
+}
+
+.daily-task-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 56rem;
+}
+.daily-task-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+}
+.daily-task-toolbar label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.daily-task-toolbar input[type='date'] {
+  min-height: 44px;
+  min-width: 12rem;
+}
+.daily-task-group,
+.daily-task-card {
+  margin-bottom: 0.85rem;
+}
+.daily-task-group header h3,
+.daily-task-card h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+.daily-task-group header p,
+.daily-task-card p,
+.daily-task-note {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.84rem;
+}
+.daily-task-assignment-list {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.85rem;
+}
+.daily-task-assignment,
+.daily-task-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+.daily-task-assignment > div,
+.daily-task-card-head > div {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.daily-task-assignment strong {
+  font-size: 0.9rem;
+}
+.daily-task-assignment span,
+.daily-task-assignment em {
+  color: var(--text-3);
+  font-size: 0.76rem;
+  font-style: normal;
+}
+.daily-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+.daily-task-form p {
+  color: var(--text-2);
+  font-size: 0.86rem;
+  margin: 0 0 0.85rem;
+}
+.daily-task-students {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.45rem;
+  max-height: 14rem;
+  overflow: auto;
+}
+.daily-task-students legend {
+  padding: 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.daily-task-students label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.86rem;
+}
+.page-content .dashboard-page-header .btn-compact-primary,
+.page-content .daily-task-actions .action-btn,
+.page-content .daily-task-assignment .action-btn {
+  min-height: 44px !important;
+  padding: 0.62rem 1rem !important;
+}
+@media (max-width: 700px) {
+  .daily-task-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .daily-task-toolbar input[type='date'] { min-width: 0; width: 100%; }
 }
