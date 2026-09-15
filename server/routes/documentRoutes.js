@@ -16,15 +16,14 @@ const router = express.Router();
 router.use(verifyToken);
 
 // Student routes
-router.get('/requirements', authorize('student', 'coordinator', 'admin'), getRequirements);
+router.get('/requirements', authorize('student', 'coordinator'), getRequirements);
 router.get('/my-documents', authorize('student'), getStudentDocuments);
 router.post('/upload', authorize('student'), uploadDocument);
 
-// Coordinator/Admin routes
-router.get('/student/:studentId', authorize('coordinator', 'admin'), getStudentDocuments);
-router.patch('/:docId/review', authorize('coordinator', 'admin'), reviewDocument);
-router.post('/requirements', authorize('admin', 'coordinator'), createRequirement);
-router.put('/requirements/:requirementId', authorize('admin', 'coordinator'), updateRequirement);
-router.patch('/requirements/:requirementId/archive', authorize('admin', 'coordinator'), archiveRequirement);
+router.get('/student/:studentId', authorize('coordinator'), getStudentDocuments);
+router.patch('/:docId/review', authorize('coordinator'), reviewDocument);
+router.post('/requirements', authorize('coordinator'), createRequirement);
+router.put('/requirements/:requirementId', authorize('coordinator'), updateRequirement);
+router.patch('/requirements/:requirementId/archive', authorize('coordinator'), archiveRequirement);
 
 export default router;

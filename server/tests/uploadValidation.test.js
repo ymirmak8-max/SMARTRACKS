@@ -24,7 +24,8 @@ test('camera images are decoded and re-encoded without requiring an external mal
   const originalSupabaseUrl = process.env.SUPABASE_URL;
   const originalServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   let storedBuffer;
-  pool.query = async (_query, params) => {
+  pool.query = async (query, params = []) => {
+    if (!String(query).includes('INSERT INTO stored_files')) return { rows: [] };
     storedBuffer = params[2];
     return { rows: [{ id: 'stored-image-id' }] };
   };

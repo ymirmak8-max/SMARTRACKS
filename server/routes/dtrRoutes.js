@@ -33,6 +33,6 @@ router.get('/history', authorize('student'), getDTRHistory);
 router.get('/deployment-info', authorize('student'), getDeploymentInfo);
 router.post('/flag-exit', authorize('student'), flagPerimeterExit);
 router.post('/update-location', authorize('student'), updateLiveLocation);
-router.get('/live-locations', authorize('coordinator', 'admin', 'supervisor'), getLiveLocations);
+router.get('/live-locations', authorize('coordinator', 'supervisor'), getLiveLocations);
 
 export default router;

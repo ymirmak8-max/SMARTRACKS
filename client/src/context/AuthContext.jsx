@@ -29,7 +29,11 @@ const hydrateUser = (user) => {
   } else {
     clearPrivacySession();
   }
-  return { ...user, privacyNoticeVersion };
+  return {
+    ...user,
+    role: user.role === 'admin' ? 'coordinator' : user.role,
+    privacyNoticeVersion,
+  };
 };
 
 export const AuthProvider = ({ children }) => {
@@ -114,14 +118,9 @@ export const AuthProvider = ({ children }) => {
       clearSessionExpected();
       setUser(null);
     };
-    const requireAdminMfa = () => {
-      setUser(current => (current?.role === 'admin' ? { ...current, mfaEnabled: false } : current));
-    };
     window.addEventListener('smartrack:session-expired', clearExpiredSession);
-    window.addEventListener('smartrack:admin-mfa-required', requireAdminMfa);
     return () => {
       window.removeEventListener('smartrack:session-expired', clearExpiredSession);
-      window.removeEventListener('smartrack:admin-mfa-required', requireAdminMfa);
     };
   }, []);
 

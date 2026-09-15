@@ -22,7 +22,7 @@ export const notifyStudentReady = async ({ firstName, lastName, source }) => {
     ? `${name} registered and is waiting for approval, then assignment to a company.`
     : `${name} is approved and ready to deploy to a company and supervisor.`;
   await notifyRoles(
-    ['coordinator', 'admin'],
+    ['coordinator'],
     source === 'register' ? 'New student registration' : 'Student ready to deploy',
     body,
     'general'

@@ -16,6 +16,7 @@ import { buildOtpAuthUrl, createMfaSecret, decryptMfaSecret, encryptMfaSecret, v
 import { isFlagEnabled } from '../utils/flags.js';
 import { sanitizePhone } from '../utils/phone.js';
 import { resolveFrontendUrl, revokeUserSessions } from '../utils/authSession.js';
+import { toAppRole } from '../utils/roles.js';
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -31,7 +32,7 @@ const serializeUser = (user) => ({
   firstName: user.first_name,
   lastName: user.last_name,
   email: user.email,
-  role: String(user.role || '').trim().toLowerCase(),
+  role: toAppRole(user.role),
   phone: user.phone,
   course: user.course,
   school: user.school,
@@ -64,10 +65,10 @@ export const login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials.' });
 
     if (user.approval_status === 'pending')
-      return res.status(403).json({ message: 'Your registration is awaiting administrator approval.' });
+      return res.status(403).json({ message: 'Your registration is awaiting coordinator approval.' });
 
     if (!isFlagEnabled(user.is_active))
-      return res.status(403).json({ message: 'Your account is inactive. Please contact the administrator.' });
+      return res.status(403).json({ message: 'Your account is inactive. Please contact your coordinator.' });
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch)
@@ -150,7 +151,7 @@ if (blockedDomains.includes(emailDomain))
     }).catch(error => console.error('Student registration notify error:', error.message));
 
     return res.status(201).json({
-      message: 'Registration submitted. An administrator must approve your account before you can sign in.',
+      message: 'Registration submitted. A coordinator must approve your account before you can sign in.',
       user: result.rows[0],
     });
   } catch (err) {
@@ -295,8 +296,8 @@ export const verifyMfaLogin = async (req, res) => {
 export const beginMfaSetup = async (req, res) => {
   try {
     const user = await findUserById(req.user.id);
-    if (String(user.role || '').trim().toLowerCase() !== 'admin')
-      return res.status(403).json({ message: 'MFA setup is restricted to administrators.' });
+    if (toAppRole(user.role) !== 'coordinator')
+      return res.status(403).json({ message: 'MFA setup is available for coordinator accounts.' });
     const secret = createMfaSecret();
     await pool.query('UPDATE users SET mfa_secret = $1, mfa_enabled = false WHERE id = $2',
       [encryptMfaSecret(secret), user.id]);
@@ -310,7 +311,7 @@ export const confirmMfaSetup = async (req, res) => {
   try {
     const result = await pool.query('SELECT mfa_secret, role FROM users WHERE id = $1', [req.user.id]);
     const user = result.rows[0];
-    if (user?.role !== 'admin' || !user.mfa_secret || !verifyTotp(decryptMfaSecret(user.mfa_secret), req.body.code))
+    if (toAppRole(user?.role) !== 'coordinator' || !user.mfa_secret || !verifyTotp(decryptMfaSecret(user.mfa_secret), req.body.code))
       return res.status(400).json({ message: 'The verification code is invalid.' });
     await pool.query('UPDATE users SET mfa_enabled = true WHERE id = $1', [req.user.id]);
     await writeAuditLog({ actorId: req.user.id, action: 'auth.mfa_enable', entityType: 'user', entityId: req.user.id, req });

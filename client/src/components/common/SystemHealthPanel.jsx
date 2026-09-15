@@ -121,7 +121,7 @@ const SystemHealthPanel = () => {
           <div className="card" style={{ marginTop: '0.875rem' }}>
             <div className="card-title">Attendance image privacy</div>
             <p style={{ color: 'var(--text-3)', fontSize: '0.84rem', marginBottom: '1rem' }}>
-              Selfies are visible only to the student, assigned coordinator or supervisor, and administrators. Every full-image view and deletion is audited.
+              Selfies are visible only to the student and the assigned coordinator or supervisor. Every full-image view and deletion is audited.
             </p>
             <div className="form-group">
               <label htmlFor="retention-days">Delete images after a deployment has ended for</label>

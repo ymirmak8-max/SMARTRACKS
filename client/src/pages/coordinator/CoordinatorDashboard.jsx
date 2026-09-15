@@ -24,6 +24,7 @@ import WorkspacePane from '../../components/common/WorkspacePane';
 import SlidingSubnav from '../../components/common/SlidingSubnav';
 import SkeletonPage from '../../components/common/Skeleton';
 import NotificationPreferences from '../../components/common/NotificationPreferences';
+import SecuritySettings from '../../components/common/SecuritySettings';
 import StudentTypeahead from '../../components/common/StudentTypeahead';
 
 const AnalyticsPage = lazy(() => import('./AnalyticsPage'));
@@ -35,9 +36,11 @@ const DeploymentsPage = lazy(() => import('../admin/DeploymentsPage'));
 const MapPage = lazy(() => import('./MapPage'));
 const RiskDashboard = lazy(() => import('../../components/common/RiskDashboard'));
 const DocumentRequirementsManager = lazy(() => import('../../components/common/DocumentRequirementsManager'));
+const UserManagementPanel = lazy(() => import('../../components/common/UserManagementPanel'));
+const SystemHealthPanel = lazy(() => import('../../components/common/SystemHealthPanel'));
 
 const COORDINATOR_VIEWS = ['deployments', 'map', 'insights', 'reviews', 'analytics', 'risks', 'attendance', 'requests', 'completion',
-  'account', 'settings', 'requirements', 'anomalies', 'announcements'];
+  'account', 'settings', 'requirements', 'anomalies', 'announcements', 'users', 'health'];
 
 const CoordinatorDashboard = () => {
   const { user } = useAuth();
@@ -232,6 +235,8 @@ const CoordinatorDashboard = () => {
     { key: 'reviews', icon: <VectorIcon name="success" size={20} />, label: 'Reviews', group: 'Monitoring', badge: anomalies.length },
     { key: 'requirements', icon: <VectorIcon name="document" size={20} />, label: 'Document Requirements', group: 'Operations' },
     { key: 'announcements', icon: <VectorIcon name="bell" size={20} />, label: 'Announcements', group: 'Communication' },
+    { key: 'users', icon: <VectorIcon name="users" size={20} />, label: 'Users', group: 'Administration' },
+    { key: 'health', icon: <VectorIcon name="activity" size={20} />, label: 'System Health', group: 'Administration' },
   ];
   const MOBILE_NAV = [
     { key: 'deployments', icon: <VectorIcon name="briefcase" size={20} />, label: 'Deploy' },
@@ -240,6 +245,8 @@ const CoordinatorDashboard = () => {
     { key: 'reviews', icon: <VectorIcon name="success" size={20} />, label: 'Reviews', badge: anomalies.length },
     { key: 'announcements', icon: <VectorIcon name="bell" size={20} />, label: 'Announcements' },
     { key: 'requirements', icon: <VectorIcon name="document" size={20} />, label: 'Requirements' },
+    { key: 'users', icon: <VectorIcon name="users" size={20} />, label: 'Users' },
+    { key: 'health', icon: <VectorIcon name="activity" size={20} />, label: 'Health' },
     { key: 'settings', icon: <VectorIcon name="settings" size={20} />, label: 'Company Settings' },
     { key: 'account', icon: <VectorIcon name="user" size={20} />, label: 'Account' },
   ];
@@ -556,7 +563,11 @@ const CoordinatorDashboard = () => {
       <div className="page-content">
         <WorkspacePane key={activeTab}>
         <Suspense fallback={<SkeletonPage variant="dashboard" />}>
-        {activeTab === 'map' ? (
+        {activeTab === 'users' ? (
+          <UserManagementPanel onToast={showToast} />
+        ) : activeTab === 'health' ? (
+          <SystemHealthPanel />
+        ) : activeTab === 'map' ? (
           <MapPage />
 
         ) : activeTab === 'insights' ? (
@@ -692,6 +703,7 @@ const CoordinatorDashboard = () => {
               </button>
             </div>
             <NotificationPreferences />
+            <SecuritySettings />
           </div>
 
         ) : activeTab === 'settings' ? (

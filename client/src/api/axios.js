@@ -51,11 +51,6 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const isAuthRequest = isAuthApiRequest(originalRequest);
 
-    if (status === 403 && error.response?.data?.code === 'ADMIN_MFA_REQUIRED') {
-      window.dispatchEvent(new Event('smartrack:admin-mfa-required'));
-      return Promise.reject(error);
-    }
-
     if (status !== 401 || !originalRequest || originalRequest._retry || isAuthRequest) {
       return Promise.reject(error);
     }

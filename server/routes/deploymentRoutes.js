@@ -16,7 +16,7 @@ import { authorize } from '../middleware/roleMiddleware.js';
 
 const router = express.Router();
 
-router.use(verifyToken, authorize('admin', 'coordinator'));
+router.use(verifyToken, authorize('coordinator'));
 
 router.get('/companies', getCompanies);
 router.get('/options', getDeploymentOptions);

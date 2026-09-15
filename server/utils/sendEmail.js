@@ -41,6 +41,6 @@ export const sendAccountStatusEmail = ({ to, status }) => sendEmail({
   html: status === 'approved'
     ? '<p>Your Smartrack registration has been approved. You can now sign in using the password you created.</p>'
     : status === 'rejected'
-      ? '<p>Your Smartrack registration was not approved. Contact the system administrator if you believe this was a mistake.</p>'
-      : '<p>Your Smartrack account has been deactivated. Contact your system administrator if you need help.</p>',
+      ? '<p>Your Smartrack registration was not approved. Contact your coordinator if you believe this was a mistake.</p>'
+      : '<p>Your Smartrack account has been deactivated. Contact your coordinator if you need help.</p>',
 });

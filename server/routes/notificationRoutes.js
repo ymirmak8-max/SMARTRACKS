@@ -25,10 +25,10 @@ router.put('/preferences', updateNotificationPreferences);
 router.get('/push/config', getPushPublicConfig);
 router.post('/push/subscribe', subscribePush);
 router.delete('/push/subscribe', unsubscribePush);
-router.get('/outbox/status', authorize('admin'), getOutboxStatus);
-router.post('/outbox/:id/retry', authorize('admin'), retryOutboxNotification);
+router.get('/outbox/status', authorize('coordinator'), getOutboxStatus);
+router.post('/outbox/:id/retry', authorize('coordinator'), retryOutboxNotification);
 router.patch('/read-all', markAllAsRead);
 router.patch('/:id/read', markAsRead);
-router.post('/', authorize('admin', 'coordinator'), createNotification);
+router.post('/', authorize('coordinator'), createNotification);
 
 export default router;

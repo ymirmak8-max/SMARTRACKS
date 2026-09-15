@@ -6,20 +6,17 @@ import SplashScreen from './components/common/SplashScreen';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import useAuth from './hooks/useAuth';
 import PrivacyConsentGate from './components/common/PrivacyConsentGate';
-import AdminMfaGate from './components/common/AdminMfaGate';
 import AuthFlow from './pages/auth/AuthFlow';
 
 const Login = lazy(() => import('./pages/auth/Login'));
 const Register = lazy(() => import('./pages/auth/Register'));
 const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
-const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard'));
 const CoordinatorDashboard = lazy(() => import('./pages/coordinator/CoordinatorDashboard'));
 const SupervisorDashboard = lazy(() => import('./pages/supervisor/SupervisorDashboard'));
 
 const ROLE_ROUTES = {
-  admin: '/admin',
   student: '/student',
   coordinator: '/coordinator',
   supervisor: '/supervisor',
@@ -48,17 +45,13 @@ function App() {
       {showSplash && <SplashScreen key="splash" onDone={handleSplashDone} />}
       <AuthProvider key="auth-provider">
         <BrowserRouter>
-          <PrivacyConsentGate><AdminMfaGate><Suspense fallback={<LoadingSpinner />}>
+          <PrivacyConsentGate><Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route element={<AuthFlow />}>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
-            </Route>
-
-            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-              <Route path="/admin/*" element={<AdminDashboard />} />
             </Route>
 
             <Route element={<ProtectedRoute allowedRoles={['student']} />}>
@@ -73,10 +66,12 @@ function App() {
               <Route path="/supervisor/*" element={<SupervisorDashboard />} />
             </Route>
 
+            <Route path="/admin" element={<Navigate to="/coordinator" replace />} />
+            <Route path="/admin/*" element={<Navigate to="/coordinator" replace />} />
             <Route path="/" element={<AppEntry />} />
             <Route path="*" element={<AppEntry />} />
           </Routes>
-          </Suspense></AdminMfaGate></PrivacyConsentGate>
+          </Suspense></PrivacyConsentGate>
         </BrowserRouter>
       </AuthProvider>
     </>

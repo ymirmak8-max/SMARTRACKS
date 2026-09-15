@@ -39,7 +39,9 @@ export const getAllUsers = async (req, res) => {
     `;
     const params = [];
 
-    if (role) {
+    if (role === 'coordinator') {
+      query += ` AND role IN ('coordinator', 'admin')`;
+    } else if (role) {
       params.push(role);
       query += ` AND role = $${params.length}`;
     }
@@ -54,7 +56,10 @@ export const getAllUsers = async (req, res) => {
 
     query += ` ORDER BY created_at DESC`;
     const result = await pool.query(query, params);
-    const users = result.rows;
+    const users = result.rows.map(user => ({
+      ...user,
+      role: user.role === 'admin' ? 'coordinator' : user.role,
+    }));
     try {
       const ids = users.map(user => user.id);
       if (ids.length) {
@@ -88,7 +93,7 @@ export const createUser = async (req, res) => {
   try {
     const { firstName, lastName, email, password, role, phone, course, school, companyId } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
-    const validRoles = ['admin', 'student', 'coordinator', 'supervisor'];
+    const validRoles = ['student', 'coordinator', 'supervisor'];
     if (!firstName || !lastName || !normalizedEmail || !password || !role)
       return res.status(400).json({ message: 'All fields are required.' });
     if (!validRoles.includes(role))
@@ -146,14 +151,14 @@ export const updateUser = async (req, res) => {
     const { id } = req.params;
     const { firstName, lastName, email, role, phone, course, school, password, companyId } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
-    const validRoles = ['admin', 'student', 'coordinator', 'supervisor'];
+    const validRoles = ['student', 'coordinator', 'supervisor'];
 
     if (!firstName?.trim() || !lastName?.trim() || !normalizedEmail || !role)
       return res.status(400).json({ message: 'First name, last name, email, and role are required.' });
     if (!validRoles.includes(role))
       return res.status(400).json({ message: 'Invalid role.' });
     if (id === req.user.id && role !== req.user.role)
-      return res.status(400).json({ message: 'You cannot change your own administrator role.' });
+      return res.status(400).json({ message: 'You cannot change your own role.' });
     if (password && password.length < 8)
       return res.status(400).json({ message: 'Password must be at least 8 characters.' });
     if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(normalizedEmail))

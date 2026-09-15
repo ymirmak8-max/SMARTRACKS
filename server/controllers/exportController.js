@@ -8,7 +8,6 @@ const parseDate = (value, fallback) => {
 };
 
 const canAccessStudent = async (user, studentId) => {
-  if (user.role === 'admin') return true;
   if (user.role === 'student') return user.id === studentId;
   const column = user.role === 'coordinator' ? 'coordinator_id' : 'supervisor_id';
   const result = await pool.query(
@@ -106,7 +105,7 @@ export const scheduleReportExport = async (req, res) => {
       return res.status(400).json({ message: `Invalid frequency. Must be one of: ${validFrequencies.join(', ')}` });
     }
 
-    const allowedType = { student: 'dtr', supervisor: 'evaluation', coordinator: 'analytics', admin: 'analytics' }[req.user.role];
+    const allowedType = { student: 'dtr', supervisor: 'evaluation', coordinator: 'analytics' }[req.user.role];
     if (reportType !== allowedType)
       return res.status(403).json({ message: 'This report type is not available for your role' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(deliveryEmail))
@@ -194,7 +193,7 @@ export const streamExportData = async (req, res) => {
 
     if (reportType === 'analytics') {
       const coordinatorId = role === 'coordinator' ? userId : null;
-      if (!['coordinator', 'admin'].includes(role))
+      if (role !== 'coordinator')
         return res.status(403).json({ message: 'Analytics export is not available for your role' });
       query = `
         SELECT

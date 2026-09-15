@@ -3,6 +3,7 @@ import { authorizeStoredFile, deleteStoredFile, getAttendanceFileMetadata, strea
 import { verifyToken } from '../middleware/authMiddleware.js';
 import { findRefreshToken, findUserById } from '../models/userModel.js';
 import { writeAuditLog } from '../utils/audit.js';
+import { toAppRole } from '../utils/roles.js';
 
 const router = express.Router();
 
@@ -12,7 +13,7 @@ const verifyFileAccess = async (req, res, next) => {
     const refresh = req.cookies?.refreshToken && await findRefreshToken(req.cookies.refreshToken);
     const user = refresh && await findUserById(refresh.user_id);
     if (!user) return res.status(401).json({ message: 'Authentication required.' });
-    req.user = user;
+    req.user = { ...user, role: toAppRole(user.role) };
     next();
   } catch {
     return res.status(401).json({ message: 'Authentication required.' });
@@ -51,8 +52,8 @@ router.post('/:token/access-log', verifyFileAccess, async (req, res) => {
 
 router.delete('/:token/attendance-selfie', verifyFileAccess, async (req, res) => {
   try {
-    if (!['admin', 'coordinator'].includes(req.user.role))
-      return res.status(403).json({ message: 'Only an assigned coordinator or admin can delete attendance images.' });
+    if (req.user.role !== 'coordinator')
+      return res.status(403).json({ message: 'Only an assigned coordinator can delete attendance images.' });
     const allowed = await authorizeStoredFile(req.params.token, req.user);
     if (!allowed) return res.status(404).json({ message: 'File not found.' });
     const metadata = await getAttendanceFileMetadata(req.params.token);

@@ -57,7 +57,7 @@ const ForgotPassword = () => {
                   ? <><strong>Check your email.</strong> Reset instructions were sent to {email}.</>
                   : resetUrl
                     ? 'Email delivery is not configured here. Use the reset link below.'
-                    : 'If an account exists for this email, follow the reset instructions or ask an administrator to reset the password.'}
+                    : 'If an account exists for this email, follow the reset instructions or ask a coordinator to reset the password.'}
               </div>
               {resetUrl && (
                 <a href={resetUrl} className="btn-primary auth-submit">Continue to reset password</a>

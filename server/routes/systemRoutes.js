@@ -7,12 +7,12 @@ import {
 } from '../controllers/systemController.js';
 
 const router = express.Router();
-router.get('/health', verifyToken, authorize('admin'), getSystemHealth);
-router.get('/privacy', verifyToken, authorize('admin'), getPrivacySettings);
-router.put('/privacy', verifyToken, authorize('admin'), updatePrivacySettings);
-router.post('/privacy/cleanup', verifyToken, authorize('admin'), runImageCleanup);
-router.get('/events', verifyToken, authorize('admin'), getOperationalEvents);
-router.get('/backups', verifyToken, authorize('admin'), getBackupStatus);
-router.get('/attendance-policy', verifyToken, authorize('admin'), getAttendancePolicy);
-router.put('/attendance-policy', verifyToken, authorize('admin'), updateAttendancePolicy);
+router.get('/health', verifyToken, authorize('coordinator'), getSystemHealth);
+router.get('/privacy', verifyToken, authorize('coordinator'), getPrivacySettings);
+router.put('/privacy', verifyToken, authorize('coordinator'), updatePrivacySettings);
+router.post('/privacy/cleanup', verifyToken, authorize('coordinator'), runImageCleanup);
+router.get('/events', verifyToken, authorize('coordinator'), getOperationalEvents);
+router.get('/backups', verifyToken, authorize('coordinator'), getBackupStatus);
+router.get('/attendance-policy', verifyToken, authorize('coordinator'), getAttendancePolicy);
+router.put('/attendance-policy', verifyToken, authorize('coordinator'), updateAttendancePolicy);
 export default router;

@@ -9,7 +9,6 @@ const ROLE_LABELS = {
   student: 'Student',
   coordinator: 'Coordinator',
   supervisor: 'Supervisor',
-  admin: 'Admin',
 };
 
 const COURSES = [

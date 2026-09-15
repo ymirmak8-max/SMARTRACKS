@@ -30,7 +30,7 @@ test('updateUser persists normalized profile and education fields', async () => 
     const { response, result } = responseRecorder();
     await updateUser({
       params: { id: 'user-2' },
-      user: { id: 'admin-1', role: 'admin' },
+      user: { id: 'coordinator-1', role: 'coordinator' },
       body: {
         firstName: '  Jane ', lastName: ' Student  ', email: ' JANE@EXAMPLE.EDU ',
         role: 'student', phone: ' 09123456789 ', course: ' BSIT ', school: ' Example University ',
@@ -50,23 +50,23 @@ test('updateUser persists normalized profile and education fields', async () => 
   }
 });
 
-test('updateUser prevents an administrator from changing their own role', async () => {
+test('updateUser prevents a coordinator from changing their own role', async () => {
   const { response, result } = responseRecorder();
   await updateUser({
-    params: { id: 'admin-1' },
-    user: { id: 'admin-1', role: 'admin' },
-    body: { firstName: 'System', lastName: 'Admin', email: 'admin@example.com', role: 'student' },
+    params: { id: 'coordinator-1' },
+    user: { id: 'coordinator-1', role: 'coordinator' },
+    body: { firstName: 'System', lastName: 'Coordinator', email: 'coordinator@example.com', role: 'student' },
   }, response);
 
   assert.equal(result.statusCode, 400);
-  assert.match(result.body.message, /own administrator role/i);
+  assert.match(result.body.message, /own role/i);
 });
 
-test('bulkUserAction prevents destructive actions against the current administrator', async () => {
+test('bulkUserAction prevents destructive actions against the current coordinator', async () => {
   const { response, result } = responseRecorder();
   await bulkUserAction({
-    user: { id: 'admin-1' },
-    body: { action: 'delete', ids: ['student-1', 'admin-1'] },
+    user: { id: 'coordinator-1' },
+    body: { action: 'delete', ids: ['student-1', 'coordinator-1'] },
   }, response);
 
   assert.equal(result.statusCode, 400);

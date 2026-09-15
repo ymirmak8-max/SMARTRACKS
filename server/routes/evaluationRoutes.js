@@ -13,6 +13,6 @@ router.use(verifyToken);
 
 router.get('/my-students', authorize('supervisor'), getStudentsForSupervisor);
 router.post('/submit', authorize('supervisor'), submitEvaluation);
-router.get('/:deploymentId', authorize('supervisor', 'coordinator', 'admin'), getEvaluations);
+router.get('/:deploymentId', authorize('supervisor', 'coordinator'), getEvaluations);
 
 export default router;

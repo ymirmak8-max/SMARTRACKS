@@ -26,11 +26,10 @@ const UserMenu = ({ onEditProfile, placement = 'chrome', compact = false }) => {
     student: 'Student',
     coordinator: placement === 'sidebar' ? 'Coordinator' : 'School Coordinator',
     supervisor: placement === 'sidebar' ? 'Supervisor' : 'Company Supervisor',
-    admin: placement === 'sidebar' ? 'Administrator' : 'System Administrator',
   }[user?.role] || user?.role;
 
   const roleIcon = {
-    student: 'education', coordinator: 'clipboard', supervisor: 'building', admin: 'settings',
+    student: 'education', coordinator: 'clipboard', supervisor: 'building',
   }[user?.role] || 'user';
 
   useLayoutEffect(() => {

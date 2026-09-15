@@ -19,7 +19,7 @@ const SecuritySettings = () => {
 
   return (
     <div className="card" style={{ marginBottom: '.875rem' }}>
-      <div className="card-title">Administrator security</div>
+      <div className="card-title">Account security</div>
       <p style={{ color: 'var(--text-2)', marginBottom: '.75rem' }}>
         Authenticator MFA is {user?.mfaEnabled ? 'enabled' : 'not enabled'}.
       </p>

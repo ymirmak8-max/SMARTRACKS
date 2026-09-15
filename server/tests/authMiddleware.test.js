@@ -64,26 +64,26 @@ test('verifyToken enforces the current privacy notice on APIs', async () => with
   }
 ));
 
-test('verifyToken requires administrator MFA outside setup routes', async () => withUser(
+test('verifyToken maps leftover administrator accounts to coordinator', async () => withUser(
   { ...activeUser, role: 'admin' },
   async () => {
-    const res = response();
-    await verifyToken(request({ role: 'admin' }, '/', '/api/users'), res, () => assert.fail('next should not run'));
-    assert.equal(res.statusCode, 403);
-    assert.equal(res.payload.code, 'ADMIN_MFA_REQUIRED');
-    assert.match(res.payload.message, /authenticator MFA/i);
+    const req = request({ role: 'admin' }, '/', '/api/users');
+    let called = false;
+    await verifyToken(req, response(), () => { called = true; });
+    assert.equal(called, true);
+    assert.equal(req.user.role, 'coordinator');
   }
 ));
 
 test('authorize rejects roles outside the allowlist', () => {
   const res = response();
-  authorize('admin')({ user: { role: 'student' } }, res, () => assert.fail('next should not run'));
+  authorize('coordinator')({ user: { role: 'student' } }, res, () => assert.fail('next should not run'));
   assert.equal(res.statusCode, 403);
-  assert.match(res.payload.message, /administrator/i);
+  assert.match(res.payload.message, /insufficient permissions/i);
 });
 
-test('authorize lets administrators through any role allowlist', () => {
-  let called = false;
-  authorize('coordinator')({ user: { role: 'admin' } }, response(), () => { called = true; });
-  assert.equal(called, true);
+test('authorize does not treat leftover admin as a superuser', () => {
+  const res = response();
+  authorize('coordinator')({ user: { role: 'admin' } }, res, () => assert.fail('next should not run'));
+  assert.equal(res.statusCode, 403);
 });

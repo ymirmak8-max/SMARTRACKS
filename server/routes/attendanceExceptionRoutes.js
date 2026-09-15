@@ -10,9 +10,9 @@ const router = express.Router();
 router.use(verifyToken);
 router.get('/mine', authorize('student'), getMyExceptions);
 router.post('/requests', authorize('student'), createRequest);
-router.get('/requests', authorize('coordinator', 'admin'), getReviewQueue);
-router.patch('/requests/:id/review', authorize('coordinator', 'admin'), reviewRequest);
-router.get('/calendar', authorize('coordinator', 'admin'), getCalendarExceptions);
-router.post('/calendar', authorize('coordinator', 'admin'), createCalendarException);
+router.get('/requests', authorize('coordinator'), getReviewQueue);
+router.patch('/requests/:id/review', authorize('coordinator'), reviewRequest);
+router.get('/calendar', authorize('coordinator'), getCalendarExceptions);
+router.post('/calendar', authorize('coordinator'), createCalendarException);
 
 export default router;

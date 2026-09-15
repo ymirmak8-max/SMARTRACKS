@@ -10,8 +10,7 @@ const getAnthropicClient = () => {
 };
 
 const assignmentFilter = `(
-  $2 = 'admin'
-  OR ($2 = 'coordinator' AND d.coordinator_id = $3)
+  ($2 = 'coordinator' AND d.coordinator_id = $3)
   OR ($2 = 'supervisor' AND d.supervisor_id = $3)
 )`;
 

@@ -5,7 +5,7 @@ import { authorize } from '../middleware/roleMiddleware.js';
 
 const router = express.Router();
 
-router.use(verifyToken, authorize('admin'));
+router.use(verifyToken, authorize('coordinator'));
 
 router.get('/', getAuditLogs);
 

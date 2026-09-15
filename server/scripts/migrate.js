@@ -58,8 +58,11 @@ try {
     WHERE key = 'attendance_policy'
       AND COALESCE((value->>'maximumGpsAccuracyMeters')::numeric, 50) < 100
   `);
-  const adminCount = await pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin'");
-  const count = Number(adminCount.rows[0]?.count) || 0;
+  const converted = await pool.query("UPDATE users SET role = 'coordinator' WHERE role = 'admin' RETURNING id");
+  if (converted.rows.length > 0)
+    console.log(`Converted ${converted.rows.length} administrator account(s) to coordinator.`);
+  const coordinatorCount = await pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'coordinator'");
+  const count = Number(coordinatorCount.rows[0]?.count) || 0;
   if (count === 0) {
     const email = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
     const password = process.env.BOOTSTRAP_ADMIN_PASSWORD;
@@ -68,12 +71,12 @@ try {
     const passwordHash = await bcrypt.hash(password, 12);
     await pool.query(
       `INSERT INTO users (first_name, last_name, email, password_hash, role, is_active, approval_status, must_change_password)
-       VALUES ('System', 'Administrator', $1, $2, 'admin', true, 'approved', false)`,
+       VALUES ('System', 'Coordinator', $1, $2, 'coordinator', true, 'approved', false)`,
       [email, passwordHash]
     );
-    console.log('Initial administrator created. Remove the bootstrap password environment variable after first deployment.');
+    console.log('Initial coordinator created. Remove the bootstrap password environment variable after first deployment.');
   } else {
-    console.log('Database is reachable over Supabase HTTPS. Administrator already exists.');
+    console.log('Database is reachable over Supabase HTTPS. Coordinator already exists.');
   }
 } catch (error) {
   console.error('Database migration failed:', error.message);

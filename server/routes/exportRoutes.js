@@ -21,10 +21,10 @@ router.use(verifyToken);
  */
 
 // Export DTR as CSV (for a specific student)
-router.get('/dtr/:studentId', authorize('student', 'coordinator', 'admin', 'supervisor'), exportDTRCSV);
+router.get('/dtr/:studentId', authorize('student', 'coordinator', 'supervisor'), exportDTRCSV);
 
 // Export analytics report as CSV
-router.get('/analytics', authorize('coordinator', 'admin'), exportAnalyticsCSV);
+router.get('/analytics', authorize('coordinator'), exportAnalyticsCSV);
 
 // Schedule a recurring report
 router.post('/schedule', scheduleReportExport);

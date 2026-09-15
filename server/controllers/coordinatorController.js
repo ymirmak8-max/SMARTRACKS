@@ -194,8 +194,8 @@ export const getAnnouncements = async (req, res) => {
 export const getAttendanceReview = async (req, res) => {
   try {
     const ownerColumn = req.user.role === 'supervisor' ? 'supervisor_id' : 'coordinator_id';
-    const assignmentFilter = req.user.role === 'admin' ? '' : `AND d.${ownerColumn} = $1`;
-    const params = req.user.role === 'admin' ? [] : [req.user.id];
+    const assignmentFilter = `AND d.${ownerColumn} = $1`;
+    const params = [req.user.id];
     const result = await pool.query(`
       SELECT tr.id, tr.student_id, tr.date, tr.clock_in, tr.clock_out,
              tr.clock_in_lat, tr.clock_in_lng, tr.clock_out_lat, tr.clock_out_lng,
@@ -227,8 +227,8 @@ export const reviewAttendanceRecord = async (req, res) => {
       return res.status(400).json({ message: 'A reason is required when rejecting attendance.' });
 
     const ownerColumn = req.user.role === 'supervisor' ? 'supervisor_id' : 'coordinator_id';
-    const assignmentFilter = req.user.role === 'admin' ? '' : `AND d.${ownerColumn} = $2`;
-    const params = req.user.role === 'admin' ? [req.params.recordId] : [req.params.recordId, req.user.id];
+    const assignmentFilter = `AND d.${ownerColumn} = $2`;
+    const params = [req.params.recordId, req.user.id];
     const existing = await pool.query(`
       SELECT tr.id, tr.student_id, tr.anomaly_flag
       FROM time_records tr JOIN deployments d ON d.id = tr.deployment_id

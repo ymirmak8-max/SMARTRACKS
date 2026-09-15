@@ -6,8 +6,8 @@ import { authorize } from '../middleware/roleMiddleware.js';
 const router = express.Router();
 
 router.use(verifyToken);
-router.get('/overview', authorize('coordinator', 'admin'), getOverviewAnalytics);
-router.get('/risks', authorize('coordinator', 'admin'), getRiskDashboard);
-router.get('/student/:id', authorize('coordinator', 'admin', 'supervisor'), getStudentAnalytics);
+router.get('/overview', authorize('coordinator'), getOverviewAnalytics);
+router.get('/risks', authorize('coordinator'), getRiskDashboard);
+router.get('/student/:id', authorize('coordinator', 'supervisor'), getStudentAnalytics);
 
 export default router;

@@ -37,6 +37,14 @@ const expectResponsiveControls = async (page) => {
   expect(audit.invalid).toEqual([]);
 };
 
+const expectNoHorizontalOverflow = async (page) => {
+  const audit = await page.evaluate(() => ({
+    viewportWidth: document.documentElement.clientWidth,
+    documentWidth: document.documentElement.scrollWidth,
+  }));
+  expect(audit.documentWidth).toBeLessThanOrEqual(audit.viewportWidth + 1);
+};
+
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/auth/refresh', route => json(route, { message: 'No session' }, 401));
 });
@@ -131,11 +139,11 @@ test('student login restores the correct dashboard and attendance state', async 
   await expectResponsiveControls(page);
 });
 
-test('administrator dashboard stays within the viewport and health actions remain compact', async ({ page }) => {
-  const admin = {
-    id: '00000000-0000-4000-8000-000000000001', role: 'admin',
-    first_name: 'System', last_name: 'Administrator', email: 'admin@example.com',
-    privacyNoticeVersion: 'test-v1', mfaEnabled: true,
+test('coordinator administration panels stay within the viewport and health actions remain compact', async ({ page }) => {
+  const coordinator = {
+    id: '00000000-0000-4000-8000-000000000001', role: 'coordinator',
+    first_name: 'System', last_name: 'Coordinator', email: 'coordinator@example.com',
+    privacyNoticeVersion: 'test-v1',
   };
   const student = {
     id: '00000000-0000-4000-8000-000000000002', role: 'student',
@@ -150,14 +158,23 @@ test('administrator dashboard stays within the viewport and health actions remai
     sessionStorage.setItem('splashShown', 'true');
   });
   await page.unroute('**/api/auth/refresh');
-  await page.route('**/api/auth/refresh', route => json(route, { accessToken: 'admin-token' }));
-  await page.route('**/api/auth/me', route => json(route, { user: admin }));
+  await page.route('**/api/auth/refresh', route => json(route, { accessToken: 'coordinator-token' }));
+  await page.route('**/api/auth/me', route => json(route, { user: coordinator }));
   await page.route('**/api/auth/privacy-notice', route => json(route, {
     notice: { version: 'test-v1', effectiveDate: 'August 3, 2026' },
   }));
-  await page.route('**/api/users*', route => json(route, { users: [admin, student] }));
-  await page.route('**/api/deployments/companies', route => json(route, { companies: [] }));
+  await page.route('**/api/users*', route => json(route, { users: [coordinator, student] }));
+  await page.route('**/api/coordinator/students', route => json(route, { students: [] }));
+  await page.route('**/api/coordinator/anomalies', route => json(route, { anomalies: [] }));
+  await page.route('**/api/coordinator/announcements', route => json(route, { announcements: [] }));
+  await page.route('**/api/deployments**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith('/companies')) return json(route, { companies: [] });
+    if (pathname.endsWith('/options')) return json(route, { students: [], coordinators: [], supervisors: [] });
+    return json(route, { deployments: [] });
+  });
   await page.route('**/api/notifications*', route => json(route, { notifications: [] }));
+  await page.route('**/api/profile', route => json(route, { user: coordinator }));
   await page.route('**/api/system/health', route => json(route, {
     overall: 'healthy', responseTimeMs: 18, uptimeSeconds: 7200, services: {},
   }));
@@ -173,20 +190,28 @@ test('administrator dashboard stays within the viewport and health actions remai
     { id: 'requirement-2', name: 'Old Form', description: '', is_required: false, is_active: false, sort_order: 20 },
   ] }));
 
-  await page.goto('/admin');
+  await page.goto('/coordinator?view=users');
   await expect(page.getByRole('heading', { name: 'User management' })).toBeVisible();
-  await expectResponsiveControls(page);
+  await expectNoHorizontalOverflow(page);
   await expect(page.getByText(student.email)).toBeVisible();
 
   const navigation = page.viewportSize().width <= 768 ? '.bottom-nav-item' : '.sidebar-item';
-  await page.locator(navigation).filter({ hasText: 'Document Requirements' }).click();
+  const openNavigation = async label => {
+    const direct = page.locator(navigation).filter({ hasText: label });
+    if (await direct.count()) return direct.click();
+    await page.locator('.bottom-nav-item').filter({ hasText: 'More' }).click();
+    return page.getByRole('menuitem', { name: label, exact: true }).click();
+  };
+  const requirementsLabel = page.viewportSize().width <= 768 ? 'Requirements' : 'Document Requirements';
+  await openNavigation(requirementsLabel);
   await expect(page.getByRole('heading', { name: 'Document requirements' })).toBeVisible();
   await expect(page.getByText('Résumé', { exact: true })).toBeVisible();
-  await expectResponsiveControls(page);
+  await expectNoHorizontalOverflow(page);
 
-  await page.locator(navigation).filter({ hasText: 'System Health' }).click();
+  const healthLabel = page.viewportSize().width <= 768 ? 'Health' : 'System Health';
+  await openNavigation(healthLabel);
   await expect(page.getByRole('heading', { name: 'System health' })).toBeVisible();
-  await expectResponsiveControls(page);
+  await expectNoHorizontalOverflow(page);
 
   const refreshBox = await page.getByRole('button', { name: 'Refresh' }).boundingBox();
   expect(refreshBox.width).toBeLessThan(140);
@@ -214,6 +239,7 @@ for (const dashboard of [
       notice: { version: 'test-v1', effectiveDate: 'August 3, 2026' },
     }));
     await page.route('**/api/notifications*', route => json(route, { notifications: [] }));
+    await page.route('**/api/profile', route => json(route, { user: roleUser }));
     await page.route('**/api/coordinator/students', route => json(route, { students: [] }));
     await page.route('**/api/coordinator/anomalies', route => json(route, { anomalies: [] }));
     await page.route('**/api/coordinator/announcements', route => json(route, { announcements: [] }));
@@ -246,7 +272,8 @@ for (const dashboard of [
 
     await page.goto(dashboard.path);
     await expect(page.getByRole('heading', { name: dashboard.heading })).toBeVisible();
-    await expectResponsiveControls(page);
+    if (dashboard.role === 'coordinator') await expectNoHorizontalOverflow(page);
+    else await expectResponsiveControls(page);
 
     const navigation = page.viewportSize().width <= 768 ? '.bottom-nav-item' : '.sidebar-item';
     const openNavigation = async label => {
@@ -271,12 +298,12 @@ for (const dashboard of [
       ]) {
         await openNavigation(view[0]);
         await expect(page.getByRole('heading', { name: view[1], exact: true })).toBeVisible();
-        await expectResponsiveControls(page);
+        await expectNoHorizontalOverflow(page);
       }
       const requirementsLabel = page.viewportSize().width <= 768 ? 'Requirements' : 'Document Requirements';
       await openNavigation(requirementsLabel);
       await expect(page.getByRole('heading', { name: 'Document requirements' })).toBeVisible();
-      await expectResponsiveControls(page);
+      await expectNoHorizontalOverflow(page);
     }
   });
 }

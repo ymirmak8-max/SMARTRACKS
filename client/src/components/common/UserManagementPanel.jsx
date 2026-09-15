@@ -1,31 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getUsers, createUser, updateUser, toggleUserStatus, deleteUser, resetUserPassword, bulkUsers, getAuditLogs } from '../../api/users';
-import { scheduleReport } from '../../api/exports';
 import useAuth from '../../hooks/useAuth';
-import DeploymentsPage from './DeploymentsPage';
-import EmptyState from '../../components/common/EmptyState';
-import Sidebar from '../../components/common/Sidebar';
-import DashboardTopbar from '../../components/common/DashboardTopbar';
-import DashboardBottomNav from '../../components/common/DashboardBottomNav';
-import ConfirmDialog from '../../components/common/ConfirmDialog';
-import { MetricCard, PageHeader } from '../../components/common/DashboardUI';
-import ReportSchedulerModal from '../../components/common/ReportSchedulerModal';
-import ExportHistoryModal from '../../components/common/ExportHistoryModal';
-import VectorIcon from '../../components/common/VectorIcon';
-import SystemHealthPanel from '../../components/common/SystemHealthPanel';
-import useDashboardNavigation from '../../hooks/useDashboardNavigation';
-import SecuritySettings from '../../components/common/SecuritySettings';
-import NotificationPreferences from '../../components/common/NotificationPreferences';
-import StudentImportButton from '../../components/common/StudentImportButton';
-import DocumentRequirementsManager from '../../components/common/DocumentRequirementsManager';
-import CollapsibleSection from '../../components/common/CollapsibleSection';
-import WorkspacePane from '../../components/common/WorkspacePane';
-import SlidingSubnav from '../../components/common/SlidingSubnav';
-import SkeletonPage from '../../components/common/Skeleton';
+import EmptyState from './EmptyState';
+import ConfirmDialog from './ConfirmDialog';
+import { PageHeader } from './DashboardUI';
+import VectorIcon from './VectorIcon';
+import StudentImportButton from './StudentImportButton';
+import CollapsibleSection from './CollapsibleSection';
+import SlidingSubnav from './SlidingSubnav';
+import SkeletonPage from './Skeleton';
 import { MAX_PHONE_DIGITS, sanitizePhone } from '../../utils/phone';
-import ProfileAvatar from '../../components/common/ProfileAvatar';
 
-const ROLES = ['admin', 'student', 'coordinator', 'supervisor'];
+const ROLES = ['student', 'coordinator', 'supervisor'];
 const EMPTY_FORM = { firstName: '', lastName: '', email: '', password: '', role: 'student', phone: '', course: '', school: '', companyId: '' };
 const COURSES = [
   'Bachelor of Science in Information Technology',
@@ -36,13 +22,11 @@ const COURSES = [
   'College of Teacher Education',
 ];
 const roleBadgeColor = {
-  admin: '#7C3AED', student: '#2563EB', coordinator: '#059669', supervisor: '#D97706',
+  student: '#2563EB', coordinator: '#059669', supervisor: '#D97706',
 };
-const ADMIN_VIEWS = ['users', 'deployments', 'requirements', 'health', 'account'];
 
-const AdminDashboard = () => {
+const UserManagementPanel = ({ onToast }) => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useDashboardNavigation('users', ADMIN_VIEWS);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -64,15 +48,16 @@ const AdminDashboard = () => {
   const [auditError, setAuditError] = useState('');
   const [auditTotal, setAuditTotal] = useState(0);
   const [companies, setCompanies] = useState([]);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [showExportHistory, setShowExportHistory] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
   const [passwordReset, setPasswordReset] = useState(null);
 
   const showToast = useCallback((msg, type = 'success') => {
-    setToast(msg); setToastType(type);
-    setTimeout(() => setToast(''), 6000);
-  }, []);
+    if (onToast) onToast(msg, type);
+    else {
+      setToast(msg); setToastType(type);
+      setTimeout(() => setToast(''), 6000);
+    }
+  }, [onToast]);
 
   const loadAuditLogs = useCallback(async ({ searchValue = auditSearch, offset = 0, append = false } = {}) => {
     setAuditLoading(true);
@@ -118,7 +103,7 @@ const AdminDashboard = () => {
   const openCreate = () => { setEditTarget(null); setForm(EMPTY_FORM); setFormError(''); setShowModal(true); };
   const openEdit = (u) => {
     setEditTarget(u);
-    setForm({ firstName: u.first_name, lastName: u.last_name, email: u.email, password: '', role: u.role, phone: sanitizePhone(u.phone), course: u.course || '', school: u.school || '', companyId: u.company_id || '' });
+    setForm({ firstName: u.first_name, lastName: u.last_name, email: u.email, password: '', role: u.role === 'admin' ? 'coordinator' : u.role, phone: sanitizePhone(u.phone), course: u.course || '', school: u.school || '', companyId: u.company_id || '' });
     setFormError(''); setShowModal(true);
   };
 
@@ -210,94 +195,13 @@ const AdminDashboard = () => {
     });
   };
 
-  const handleScheduleReport = async (options) => {
-    try {
-      await scheduleReport(options);
-      showToast('Report scheduled successfully.');
-      setShowScheduleModal(false);
-    } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to schedule report', { cause: error });
-    }
-  };
-
-  const totalUsers = users.length;
-  const totalStudents = users.filter(u => u.role === 'student').length;
-  const totalActive = users.filter(u => u.is_active).length;
-  const totalCoordinators = users.filter(u => u.role === 'coordinator').length;
-  const totalSupervisors = users.filter(u => u.role === 'supervisor').length;
   const pendingApprovals = users.filter(u => u.approval_status === 'pending').length;
-
-  const NAV_ITEMS = [
-    { key: 'users', icon: <VectorIcon name="users" size={20} />, label: 'Users', badge: pendingApprovals },
-    { key: 'deployments', icon: <VectorIcon name="grid" size={20} />, label: 'Deployments' },
-    { key: 'requirements', icon: <VectorIcon name="document" size={20} />, label: 'Requirements' },
-    { key: 'health', icon: <VectorIcon name="activity" size={20} />, label: 'Health' },
-  ];
+  const displayRole = (role) => role === 'admin' ? 'coordinator' : role;
 
   return (
-    <div className="workspace-shell">
-
-      {/* Sidebar — desktop only */}
-      <Sidebar
-        user={user}
-        navItems={NAV_ITEMS}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        role="admin"
-        onEditProfile={() => setActiveTab('account')}
-      />
-
-      {/* Topbar */}
-      <DashboardTopbar role="admin" onEditProfile={() => setActiveTab('account')} />
-
-      {/* Content */}
-      <div className="page-content">
-        <WorkspacePane key={activeTab}>
-        {activeTab === 'deployments' ? (
-          <DeploymentsPage onBack={() => setActiveTab('users')} />
-
-        ) : activeTab === 'health' ? (
-          <SystemHealthPanel />
-
-        ) : activeTab === 'requirements' ? (
-          <DocumentRequirementsManager role="Administrator" />
-
-        ) : activeTab === 'account' ? (
-          <div>
-            <PageHeader title="Account" subtitle="Update your administrator profile, security, and notification preferences." breadcrumbs={[{ label: 'Administrator' }, { label: 'Account' }]} />
-            <div className="card" style={{ marginBottom: '0.875rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <ProfileAvatar
-                  initials={`${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`.toUpperCase()}
-                  onToast={showToast}
-                />
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{user?.first_name} {user?.last_name}</div>
-                  <div style={{ color: 'var(--text-3)', fontSize: '0.82rem', marginTop: '0.15rem' }}>{user?.email}</div>
-                  <span className="badge badge-primary" style={{ marginTop: '0.4rem', fontSize: '0.72rem' }}><VectorIcon name="settings" size={13} /> System Administrator</span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '0.875rem' }}>
-              <div className="card-title" style={{ marginBottom: '0.5rem' }}>System Overview</div>
-              <div className="stat-grid stat-grid-fill">
-                <MetricCard label="Total Users" value={totalUsers} />
-                <MetricCard label="Students" value={totalStudents} />
-                <MetricCard label="Active" value={totalActive} tone="success" />
-                <MetricCard label="Coordinators" value={totalCoordinators} />
-                <MetricCard label="Supervisors" value={totalSupervisors} tone="warning" />
-              </div>
-            </div>
-
-            <SecuritySettings />
-            <NotificationPreferences />
-
-          </div>
-
-        ) : (
-          <div className="user-management-page">
-            <PageHeader title="User management" subtitle={`${pendingApprovals} account${pendingApprovals === 1 ? '' : 's'} awaiting approval`} breadcrumbs={[{ label: 'Administrator' }, { label: 'Users' }]} actions={
+    <>
+      <div className="user-management-page">
+            <PageHeader title="User management" subtitle={`${pendingApprovals} account${pendingApprovals === 1 ? '' : 's'} awaiting approval`} breadcrumbs={[{ label: 'Coordinator' }, { label: 'Users' }]} actions={
                       <div className="admin-header-actions">
                         <button type="button" onClick={openAudit} className="btn-compact-primary icon-label"><VectorIcon name="clock" size={16} /> Audit history</button>
                         <StudentImportButton onImported={(message) => { showToast(message); fetchUsers(); }} />
@@ -330,7 +234,6 @@ const AdminDashboard = () => {
                 { key: 'student', label: 'Students' },
                 { key: 'supervisor', label: 'Supervisors' },
                 { key: 'coordinator', label: 'Coordinators' },
-                { key: 'admin', label: 'Admins' },
               ]}
             />
             <div className="user-directory-tools">
@@ -366,7 +269,7 @@ const AdminDashboard = () => {
               <CollapsibleSection
                 key={u.id}
                 title={`${u.first_name} ${u.last_name}`}
-                subtitle={`${u.email} · ${u.role}${u.approval_status === 'pending' ? ' · pending' : ''}`}
+                subtitle={`${u.email} · ${displayRole(u.role)}${u.approval_status === 'pending' ? ' · pending' : ''}`}
                 defaultOpen={u.approval_status === 'pending'}
               >
                 <div className="admin-user-card-header">
@@ -380,7 +283,7 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                   <div className="admin-user-badges">
-                    <span className="badge" style={{ background: roleBadgeColor[u.role] + '22', color: roleBadgeColor[u.role], textTransform: 'capitalize' }}>{u.role}</span>
+                    <span className="badge" style={{ background: (roleBadgeColor[displayRole(u.role)] || '#059669') + '22', color: roleBadgeColor[displayRole(u.role)] || '#059669', textTransform: 'capitalize' }}>{displayRole(u.role)}</span>
                     <span className="badge" style={{
                       background: u.is_active ? 'var(--success-light)' : 'var(--danger-light)',
                       color: u.is_active ? 'var(--success)' : 'var(--danger)',
@@ -456,12 +359,6 @@ const AdminDashboard = () => {
               </div>
             )}
           </div>
-        )}
-        </WorkspacePane>
-      </div>
-
-      {/* Bottom Nav — mobile only */}
-      <DashboardBottomNav items={NAV_ITEMS} activeKey={activeTab} onChange={setActiveTab} />
 
       {/* User Modal */}
       {showModal && (
@@ -547,19 +444,6 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Admin Export Modals */}
-      <ReportSchedulerModal
-        isOpen={showScheduleModal}
-        onClose={() => setShowScheduleModal(false)}
-        onSchedule={handleScheduleReport}
-        reportType="analytics"
-        reportTypeLabel="System Report"
-      />
-
-      <ExportHistoryModal
-        isOpen={showExportHistory}
-        onClose={() => setShowExportHistory(false)}
-      />
       <ConfirmDialog
         open={!!confirmation}
         title={confirmation?.title}
@@ -600,11 +484,11 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {toast && (
+      {toast && !onToast && (
         <div className={`toast ${toastType === 'error' ? 'toast-error' : ''}`}>{toast}</div>
       )}
-    </div>
+    </>
   );
 };
 
-export default AdminDashboard;
+export default UserManagementPanel;

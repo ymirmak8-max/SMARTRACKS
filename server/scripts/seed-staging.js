@@ -13,7 +13,6 @@ const client = await pool.connect();
 try {
   await client.query('BEGIN');
   const users = [
-    ['Staging', 'Admin', 'admin@staging.smartrack.test', 'admin'],
     ['Staging', 'Coordinator', 'coordinator@staging.smartrack.test', 'coordinator'],
     ['Staging', 'Supervisor', 'supervisor@staging.smartrack.test', 'supervisor'],
     ['Staging', 'Student', 'student@staging.smartrack.test', 'student'],

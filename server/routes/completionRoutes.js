@@ -9,6 +9,6 @@ const router = express.Router();
 router.use(verifyToken);
 router.get('/mine', authorize('student'), getMyCompletion);
 router.post('/request', authorize('student'), requestCompletion);
-router.get('/queue', authorize('coordinator', 'admin'), getCompletionQueue);
-router.patch('/:id/review', authorize('coordinator', 'admin'), reviewCompletion);
+router.get('/queue', authorize('coordinator'), getCompletionQueue);
+router.patch('/:id/review', authorize('coordinator'), reviewCompletion);
 export default router;

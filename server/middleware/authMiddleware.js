@@ -1,12 +1,10 @@
 import jwt from 'jsonwebtoken';
 import pool from '../config/db.js';
 import { isFlagEnabled } from '../utils/flags.js';
+import { toAppRole } from '../utils/roles.js';
 
 const isAllowedBeforePrivacyAcknowledgement = req =>
   req.baseUrl === '/api/auth' && ['/privacy/accept', '/privacy-notice', '/logout', '/me'].includes(req.path);
-
-const isAllowedBeforeAdminMfa = req =>
-  req.baseUrl === '/api/auth' && ['/mfa/setup', '/mfa/confirm', '/logout', '/me', '/privacy/accept', '/privacy-notice'].includes(req.path);
 
 export const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -29,16 +27,13 @@ export const verifyToken = async (req, res, next) => {
     if (Number(decoded.tokenVersion || 0) !== Number(user.token_version || 0))
       return res.status(401).json({ message: 'Your session has been revoked. Sign in again.' });
 
-    const role = String(user.role || '').trim().toLowerCase();
+    const role = toAppRole(user.role);
     req.user = { ...decoded, id: user.id, email: user.email, role,
       mfaEnabled: isFlagEnabled(user.mfa_enabled) };
     if (user.current_privacy_version && user.privacy_notice_version !== user.current_privacy_version
       && !isAllowedBeforePrivacyAcknowledgement(req))
       return res.status(428).json({ code: 'PRIVACY_NOTICE_REQUIRED',
         message: 'Review and acknowledge the current privacy notice before continuing.' });
-    if (role === 'admin' && !isFlagEnabled(user.mfa_enabled) && !isAllowedBeforeAdminMfa(req))
-      return res.status(403).json({ code: 'ADMIN_MFA_REQUIRED',
-        message: 'Set up authenticator MFA to continue as administrator.' });
     next();
   } catch {
     return res.status(401).json({ message: 'Invalid or expired token.' });

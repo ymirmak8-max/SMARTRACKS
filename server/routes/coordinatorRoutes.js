@@ -15,13 +15,12 @@ const router = express.Router();
 
 router.use(verifyToken);
 
-// Coordinator/Admin only
-router.get('/students', authorize('coordinator', 'admin'), getDeployedStudents);
-router.get('/students/:studentId', authorize('coordinator', 'admin'), getStudentDetail);
-router.get('/anomalies', authorize('coordinator', 'admin'), getAnomalyReport);
-router.get('/attendance-review', authorize('coordinator', 'supervisor', 'admin'), getAttendanceReview);
-router.patch('/attendance-review/:recordId', authorize('coordinator', 'supervisor', 'admin'), reviewAttendanceRecord);
-router.post('/announcements', authorize('coordinator', 'admin'), createAnnouncement);
+router.get('/students', authorize('coordinator'), getDeployedStudents);
+router.get('/students/:studentId', authorize('coordinator'), getStudentDetail);
+router.get('/anomalies', authorize('coordinator'), getAnomalyReport);
+router.get('/attendance-review', authorize('coordinator', 'supervisor'), getAttendanceReview);
+router.patch('/attendance-review/:recordId', authorize('coordinator', 'supervisor'), reviewAttendanceRecord);
+router.post('/announcements', authorize('coordinator'), createAnnouncement);
 
 // All roles can view announcements
 router.get('/announcements', getAnnouncements);

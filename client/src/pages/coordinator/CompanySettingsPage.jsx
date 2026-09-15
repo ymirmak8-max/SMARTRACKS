@@ -146,7 +146,7 @@ const CompanySettingsPage = ({ onBack }) => {
         <SkeletonPage variant="list" label="Loading companies" />
       ) : companies.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>
-          No companies found. Ask the admin to add companies first.
+          No companies found. Add a company to get started.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
