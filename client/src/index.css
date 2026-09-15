@@ -3946,9 +3946,10 @@ body {
   width: 100%;
   margin-bottom: 1rem;
 }
-.stat-grid-2, .grid-2 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.stat-grid-2, .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 44rem; }
 .stat-grid-3, .stat-grid, .stat-grid-fill {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 56rem;
 }
 
 .card, .stat-card, .list-item, .collapse-card, .table-wrapper, .login-card {
@@ -4996,7 +4997,8 @@ html[data-sidebar='collapsed'] .user-menu-copy { display: none !important; }
 .student-directory-toolbar,
 .deployment-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(11rem, 14rem);
+  grid-template-columns: minmax(16rem, 32rem) minmax(11rem, 14rem);
+  justify-content: start;
   gap: 0.65rem;
   align-items: end;
   margin-bottom: 0.85rem;
@@ -5196,6 +5198,41 @@ html:not([data-theme='dark']) .workspace-subnav-thumb {
   color: var(--warning);
 }
 
+html[data-sidebar='collapsed'] .sidebar .sidebar-item-label,
+html[data-sidebar='collapsed'] .sidebar .user-menu-copy,
+html[data-sidebar='collapsed'] .sidebar .brand-wordmark,
+html[data-sidebar='collapsed'] .sidebar .sidebar-section-label,
+html[data-sidebar='collapsed'] .sidebar .sidebar-active-dot {
+  display: none !important;
+  max-width: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+}
+html[data-sidebar='collapsed'] .sidebar-nav {
+  align-items: center;
+  gap: 0.2rem !important;
+  padding-inline: 0.45rem !important;
+}
+html[data-sidebar='collapsed'] .sidebar-nav-group,
+html[data-sidebar='collapsed'] .sidebar-nav-group + .sidebar-nav-group {
+  margin-top: 0.2rem;
+  width: 100%;
+  justify-items: center;
+}
+html[data-sidebar='collapsed'] .sidebar-item {
+  width: 44px !important;
+  min-width: 44px;
+  min-height: 44px;
+  margin-inline: auto;
+  padding: 0 !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  flex-wrap: nowrap !important;
+  overflow: hidden;
+}
 html[data-sidebar='collapsed'] .sidebar-footer {
   justify-content: center !important;
   padding-inline: 0.55rem !important;
