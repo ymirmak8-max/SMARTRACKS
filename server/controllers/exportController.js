@@ -8,6 +8,7 @@ const parseDate = (value, fallback) => {
 };
 
 const canAccessStudent = async (user, studentId) => {
+  if (user.role === 'coordinator') return true;
   if (user.role === 'student') return user.id === studentId;
   const column = user.role === 'coordinator' ? 'coordinator_id' : 'supervisor_id';
   const result = await pool.query(
@@ -59,7 +60,7 @@ export const exportAnalyticsCSV = async (req, res) => {
     const { id: userId, role } = req.user;
 
     // Get coordinator ID if user is coordinator
-    const coordinatorId = role === 'coordinator' ? userId : null;
+    const coordinatorId = null;
 
     const start = parseDate(startDate, new Date(new Date().getFullYear(), 0, 1));
     const end = parseDate(endDate, new Date());
@@ -116,7 +117,7 @@ export const scheduleReportExport = async (req, res) => {
       ? { ...reportParams, studentId: userId }
       : reportType === 'evaluation'
         ? { ...reportParams, supervisorId: userId }
-        : { ...reportParams, coordinatorId: req.user.role === 'coordinator' ? userId : null };
+        : { ...reportParams, coordinatorId: null };
 
     const scheduled = await exportService.scheduleReport({
       userId,
@@ -192,7 +193,7 @@ export const streamExportData = async (req, res) => {
     let params = [];
 
     if (reportType === 'analytics') {
-      const coordinatorId = role === 'coordinator' ? userId : null;
+      const coordinatorId = null;
       if (role !== 'coordinator')
         return res.status(403).json({ message: 'Analytics export is not available for your role' });
       query = `

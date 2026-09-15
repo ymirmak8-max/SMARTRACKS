@@ -225,7 +225,7 @@ const SupervisorLiveMap = () => {
       <div className="map-page-head">
         <div>
           <div className="section-title icon-label"><VectorIcon name="map" size={18} /> Live map</div>
-          <div className="section-sub">{locations.length} student{locations.length === 1 ? '' : 's'} reporting recently</div>
+          <div className="section-sub">{locations.length} assigned student{locations.length === 1 ? '' : 's'}</div>
         </div>
         <div className="map-header-actions">
           <button type="button" className="action-btn action-btn-primary icon-label" onClick={() => loadLocations(true)} disabled={refreshing}>
@@ -252,7 +252,7 @@ const SupervisorLiveMap = () => {
       <div className="card">
         <div className="card-title">Recently reporting students</div>
         {!locations.length ? (
-          <p className="live-map-empty">No assigned students are timed in or have sent a location recently. Students appear here after they time in.</p>
+          <p className="live-map-empty">No assigned students yet. They appear here after a coordinator deploys them to your company.</p>
         ) : locations.map(location => {
           const anomaly = Boolean(location.anomaly_flag);
           const clockedIn = Boolean(location.is_clocked_in);
@@ -264,7 +264,7 @@ const SupervisorLiveMap = () => {
               </div>
               <div className="live-map-student-status">
                 <span className={anomaly ? 'danger' : clockedIn ? 'success' : ''}>
-                  {anomaly ? 'Flagged' : clockedIn ? 'Timed in' : 'Offline'}
+                  {anomaly ? 'Flagged' : clockedIn ? 'Timed in' : location.clock_out ? 'Timed out' : 'Not timed in'}
                 </span>
                 <small>{formatTime(location.updated_at)}</small>
               </div>

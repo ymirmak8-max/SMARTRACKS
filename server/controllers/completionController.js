@@ -53,8 +53,8 @@ export const requestCompletion = async (req, res) => {
 
 export const getCompletionQueue = async (req, res) => {
   try {
-    const filter = req.user.role === 'coordinator' ? 'WHERE d.coordinator_id = $1' : 'WHERE true';
-    const params = req.user.role === 'coordinator' ? [req.user.id] : [];
+    const filter = 'WHERE true';
+    const params = [];
     const result = await pool.query(`${readinessQuery} ${filter}
       ORDER BY CASE d.completion_status WHEN 'requested' THEN 0 ELSE 1 END, d.completion_requested_at DESC NULLS LAST`, params);
     return res.status(200).json({ completions: result.rows.map(withReadiness) });
@@ -72,10 +72,10 @@ export const reviewCompletion = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const filter = req.user.role === 'coordinator' ? 'AND coordinator_id = $4' : '';
+    const filter = '';
     const params = [
       req.params.id, decision, req.user.id,
-      req.user.role === 'coordinator' ? req.user.id : null,
+      req.user.id,
       String(remarks || '').trim() || null,
     ];
     const result = await client.query(`

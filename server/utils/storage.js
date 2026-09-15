@@ -312,7 +312,7 @@ export const authorizeStoredFile = async (token, user) => {
   `, [fileUrl]);
   const ownerId = result.rows[0]?.owner_id;
   if (!ownerId) return false;
-  if (ownerId === user.id) return true;
+  if (user.role === 'coordinator' || ownerId === user.id) return true;
   if (!['coordinator', 'supervisor'].includes(user.role)) return false;
   const assignmentColumn = user.role === 'coordinator' ? 'coordinator_id' : 'supervisor_id';
   const assignment = await pool.query(

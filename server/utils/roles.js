@@ -4,3 +4,5 @@ export const toAppRole = (role) => {
   const value = String(role || '').trim().toLowerCase();
   return value === 'admin' ? 'coordinator' : value;
 };
+
+export const seesAllAssignments = (role) => toAppRole(role) === 'coordinator';

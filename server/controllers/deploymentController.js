@@ -252,7 +252,6 @@ export const archiveCompanyLocation = async (req, res) => {
 // GET /api/deployments
 export const getDeployments = async (req, res) => {
   try {
-    const coordinatorOnly = req.user.role === 'coordinator';
     const result = await pool.query(`
       SELECT 
         d.*,
@@ -261,7 +260,19 @@ export const getDeployments = async (req, res) => {
         co.first_name AS coordinator_first, co.last_name AS coordinator_last,
         c.name AS company_name, cl.name AS primary_location_name, cl.address AS location_address,
         COALESCE(json_agg(json_build_object('id', acl.id, 'name', acl.name, 'isPrimary', dl.is_primary))
-          FILTER (WHERE acl.id IS NOT NULL), '[]'::json) AS assigned_locations
+          FILTER (WHERE acl.id IS NOT NULL), '[]'::json) AS assigned_locations,
+        (
+          SELECT clock_in FROM time_records today
+          WHERE today.student_id = d.student_id
+            AND today.date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::date
+          ORDER BY today.clock_in DESC NULLS LAST LIMIT 1
+        ) AS today_clock_in,
+        (
+          SELECT clock_out FROM time_records today
+          WHERE today.student_id = d.student_id
+            AND today.date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::date
+          ORDER BY today.clock_in DESC NULLS LAST LIMIT 1
+        ) AS today_clock_out
       FROM deployments d
       JOIN users s ON d.student_id = s.id
       LEFT JOIN users sv ON d.supervisor_id = sv.id
@@ -270,10 +281,9 @@ export const getDeployments = async (req, res) => {
       LEFT JOIN company_locations cl ON cl.id = d.primary_location_id
       LEFT JOIN deployment_locations dl ON dl.deployment_id = d.id
       LEFT JOIN company_locations acl ON acl.id = dl.location_id
-      WHERE ($1::boolean = false OR d.coordinator_id = $2)
       GROUP BY d.id, s.id, sv.id, co.id, c.id, cl.id
       ORDER BY d.created_at DESC
-    `, [coordinatorOnly, req.user.id]);
+    `);
     return res.status(200).json({ deployments: result.rows });
   } catch (err) {
     console.error('Get deployments error:', err);
@@ -354,7 +364,6 @@ export const updateDeployment = async (req, res) => {
     const { id } = req.params;
     const { supervisorId, coordinatorId: requestedCoordinatorId, companyId, requiredHours, startDate, endDate, status,
       workDays, workStartTime, workEndTime, lateGraceMinutes, primaryLocationId, locationIds } = req.body;
-    const coordinatorId = req.user.role === 'coordinator' ? req.user.id : requestedCoordinatorId;
     const hours = parsePositiveNumber(requiredHours ?? 486);
     const schedule = parseSchedule({ workDays, workStartTime, workEndTime, lateGraceMinutes });
     if (!companyId || !hours)
@@ -366,11 +375,11 @@ export const updateDeployment = async (req, res) => {
     if (startDate && endDate && new Date(endDate) < new Date(startDate))
       return res.status(400).json({ message: 'End date cannot be before the start date.' });
     const current = await pool.query(
-      `SELECT student_id FROM deployments
-       WHERE id = $1 AND ($2::boolean = false OR coordinator_id = $3)`,
-      [id, req.user.role === 'coordinator', req.user.id]
+      'SELECT student_id, coordinator_id FROM deployments WHERE id = $1',
+      [id]
     );
     if (!current.rows.length) return res.status(404).json({ message: 'Deployment not found.' });
+    const coordinatorId = requestedCoordinatorId || current.rows[0].coordinator_id || req.user.id;
     const invalidRole = await validateDeploymentUsers({
       studentId: current.rows[0].student_id, supervisorId, coordinatorId,
     });

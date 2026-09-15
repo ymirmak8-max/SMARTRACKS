@@ -79,10 +79,7 @@ export const createRequest = async (req, res) => {
 export const getReviewQueue = async (req, res) => {
   try {
     const params = [];
-    const assignmentFilter = req.user.role === 'coordinator'
-      ? `AND EXISTS (SELECT 1 FROM deployments d WHERE d.student_id = ae.student_id AND d.coordinator_id = $1 AND d.status = 'active')`
-      : '';
-    if (req.user.role === 'coordinator') params.push(req.user.id);
+    const assignmentFilter = '';
     const result = await pool.query(`
       SELECT ae.*, u.first_name, u.last_name, u.email, c.name AS company_name
       FROM attendance_exceptions ae
@@ -106,10 +103,7 @@ export const reviewRequest = async (req, res) => {
     if (!['approved', 'rejected'].includes(decision))
       return res.status(400).json({ message: 'Decision must be approved or rejected.' });
     const params = [req.params.id, decision, remarks?.trim() || null, req.user.id];
-    const accessFilter = req.user.role === 'coordinator'
-      ? `AND EXISTS (SELECT 1 FROM deployments d WHERE d.student_id = ae.student_id AND d.coordinator_id = $5 AND d.status = 'active')`
-      : '';
-    if (req.user.role === 'coordinator') params.push(req.user.id);
+    const accessFilter = '';
     await client.query('BEGIN');
     const result = await client.query(`
       UPDATE attendance_exceptions ae

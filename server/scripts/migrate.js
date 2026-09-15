@@ -78,6 +78,21 @@ try {
   } else {
     console.log('Database is reachable over Supabase HTTPS. Coordinator already exists.');
   }
+  const attached = await pool.query(`
+    UPDATE deployments
+    SET coordinator_id = (
+      SELECT id FROM users
+      WHERE role = 'coordinator' AND is_active = true AND approval_status = 'approved'
+      ORDER BY created_at ASC
+      LIMIT 1
+    )
+    WHERE coordinator_id IS NULL
+      AND status = 'active'
+      AND EXISTS (SELECT 1 FROM users WHERE role = 'coordinator' AND is_active = true AND approval_status = 'approved')
+    RETURNING id
+  `);
+  if (attached.rows.length > 0)
+    console.log(`Attached ${attached.rows.length} unassigned deployment(s) to a coordinator.`);
 } catch (error) {
   console.error('Database migration failed:', error.message);
   process.exitCode = 1;

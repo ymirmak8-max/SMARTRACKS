@@ -4,9 +4,6 @@ import { writeAuditLog } from '../utils/audit.js';
 // GET /api/coordinator/students
 export const getDeployedStudents = async (req, res) => {
   try {
-    const isCoordinator = req.user.role === 'coordinator';
-    const coordinatorFilter = isCoordinator ? 'AND (d.coordinator_id = $1 OR d.id IS NULL)' : '';
-    const params = isCoordinator ? [req.user.id] : [];
     const result = await pool.query(`
       SELECT 
         u.id, u.first_name, u.last_name, u.email, u.phone,
@@ -16,7 +13,19 @@ export const getDeployedStudents = async (req, res) => {
         COUNT(CASE WHEN tr.anomaly_flag IS NOT NULL THEN 1 END) AS anomaly_count,
         (SELECT COUNT(*) FROM student_documents sd WHERE sd.student_id = u.id AND sd.status = 'pending') AS pending_documents,
         (SELECT COUNT(*) FROM student_documents sd WHERE sd.student_id = u.id AND sd.status = 'approved') AS approved_documents,
-        (SELECT COUNT(*) FROM document_requirements) AS total_requirements
+        (SELECT COUNT(*) FROM document_requirements) AS total_requirements,
+        (
+          SELECT clock_in FROM time_records today
+          WHERE today.student_id = u.id
+            AND today.date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::date
+          ORDER BY today.clock_in DESC NULLS LAST LIMIT 1
+        ) AS today_clock_in,
+        (
+          SELECT clock_out FROM time_records today
+          WHERE today.student_id = u.id
+            AND today.date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::date
+          ORDER BY today.clock_in DESC NULLS LAST LIMIT 1
+        ) AS today_clock_out
       FROM users u
       LEFT JOIN deployments d ON d.student_id = u.id AND d.status = 'active'
       LEFT JOIN companies c ON d.company_id = c.id
@@ -24,11 +33,10 @@ export const getDeployedStudents = async (req, res) => {
       WHERE u.role = 'student'
         AND u.is_active = true
         AND u.approval_status = 'approved'
-        ${coordinatorFilter}
       GROUP BY u.id, u.first_name, u.last_name, u.email, u.phone,
                d.id, d.required_hours, d.start_date, d.end_date, d.status, c.name
       ORDER BY (d.id IS NULL) DESC, u.last_name ASC
-    `, params);
+    `);
     return res.status(200).json({ students: result.rows });
   } catch (err) {
     console.error('Get deployed students error:', err);
@@ -40,9 +48,6 @@ export const getDeployedStudents = async (req, res) => {
 export const getStudentDetail = async (req, res) => {
   try {
     const { studentId } = req.params;
-
-    const coordinatorFilter = req.user.role === 'coordinator' ? 'AND d.coordinator_id = $2' : '';
-    const params = req.user.role === 'coordinator' ? [studentId, req.user.id] : [studentId];
     const student = await pool.query(`
   SELECT u.id, u.first_name, u.last_name, u.email, u.phone,
          u.course, u.school,
@@ -51,8 +56,8 @@ export const getStudentDetail = async (req, res) => {
   FROM users u
   JOIN deployments d ON d.student_id = u.id
   JOIN companies c ON d.company_id = c.id
-  WHERE u.id = $1 AND u.role = 'student' ${coordinatorFilter}
-`, params);
+  WHERE u.id = $1 AND u.role = 'student'
+`, [studentId]);
 
     if (student.rows.length === 0)
       return res.status(404).json({ message: 'Student not found.' });
@@ -96,8 +101,6 @@ export const getStudentDetail = async (req, res) => {
 // GET /api/coordinator/anomalies
 export const getAnomalyReport = async (req, res) => {
   try {
-    const coordinatorFilter = req.user.role === 'coordinator' ? 'AND d.coordinator_id = $1' : '';
-    const params = req.user.role === 'coordinator' ? [req.user.id] : [];
     const result = await pool.query(`
       SELECT 
         tr.id, tr.date, tr.clock_in, tr.clock_out, tr.anomaly_flag,
@@ -108,10 +111,10 @@ export const getAnomalyReport = async (req, res) => {
       JOIN users u ON tr.student_id = u.id
       JOIN deployments d ON tr.deployment_id = d.id
       JOIN companies c ON d.company_id = c.id
-      WHERE tr.anomaly_flag IS NOT NULL ${coordinatorFilter}
+      WHERE tr.anomaly_flag IS NOT NULL
       ORDER BY tr.date DESC
       LIMIT 50
-    `, params);
+    `);
     return res.status(200).json({ anomalies: result.rows });
   } catch (err) {
     console.error('Get anomalies error:', err);
@@ -193,9 +196,14 @@ export const getAnnouncements = async (req, res) => {
 // GET /api/coordinator/attendance-review
 export const getAttendanceReview = async (req, res) => {
   try {
-    const ownerColumn = req.user.role === 'supervisor' ? 'supervisor_id' : 'coordinator_id';
-    const assignmentFilter = `AND d.${ownerColumn} = $1`;
-    const params = [req.user.id];
+    const isSupervisor = req.user.role === 'supervisor';
+    const assignmentFilter = isSupervisor
+      ? `AND (
+           d.supervisor_id = $1
+           OR (d.supervisor_id IS NULL AND d.company_id = (SELECT company_id FROM users WHERE id = $1))
+         )`
+      : '';
+    const params = isSupervisor ? [req.user.id] : [];
     const result = await pool.query(`
       SELECT tr.id, tr.student_id, tr.date, tr.clock_in, tr.clock_out,
              tr.clock_in_lat, tr.clock_in_lng, tr.clock_out_lat, tr.clock_out_lng,
@@ -226,9 +234,14 @@ export const reviewAttendanceRecord = async (req, res) => {
     if (decision === 'rejected' && !String(remarks || '').trim())
       return res.status(400).json({ message: 'A reason is required when rejecting attendance.' });
 
-    const ownerColumn = req.user.role === 'supervisor' ? 'supervisor_id' : 'coordinator_id';
-    const assignmentFilter = `AND d.${ownerColumn} = $2`;
-    const params = [req.params.recordId, req.user.id];
+    const isSupervisor = req.user.role === 'supervisor';
+    const assignmentFilter = isSupervisor
+      ? `AND (
+           d.supervisor_id = $2
+           OR (d.supervisor_id IS NULL AND d.company_id = (SELECT company_id FROM users WHERE id = $2))
+         )`
+      : '';
+    const params = isSupervisor ? [req.params.recordId, req.user.id] : [req.params.recordId];
     const existing = await pool.query(`
       SELECT tr.id, tr.student_id, tr.anomaly_flag
       FROM time_records tr JOIN deployments d ON d.id = tr.deployment_id

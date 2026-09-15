@@ -417,7 +417,7 @@ L.default.Icon.Default.mergeOptions({
         <div>
           <div className="section-title">Live Map</div>
           <div className="section-sub">
-            {onlineCount > 0 ? `${onlineCount} student${onlineCount !== 1 ? 's' : ''} timed in or online` : 'No students timed in'}
+            {onlineCount > 0 ? `${onlineCount} deployed student${onlineCount !== 1 ? 's' : ''}` : 'No deployed students'}
             {lastUpdated && ` • Updated ${formatTime(lastUpdated)}`}
           </div>
         </div>
@@ -583,13 +583,14 @@ L.default.Icon.Default.mergeOptions({
         {liveLocations.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-3)' }}>
             <div style={{ color: 'var(--text-3)', marginBottom: '0.5rem' }}><VectorIcon name="map" size={30} /></div>
-            <p style={{ fontSize: '0.875rem' }}>No students timed in right now.</p>
-            <p style={{ fontSize: '0.78rem', marginTop: '0.25rem' }}>Students appear here after they time in. Their location is recorded automatically from their device.</p>
+            <p style={{ fontSize: '0.875rem' }}>No deployed students yet.</p>
+            <p style={{ fontSize: '0.78rem', marginTop: '0.25rem' }}>Deployed students appear here with their timed in / timed out status for today.</p>
           </div>
         ) : liveLocations.map(loc => {
           const isClockedIn = loc.clock_in && !loc.clock_out;
+          const clockLabel = isClockedIn ? 'Timed In' : loc.clock_out ? 'Timed Out' : 'Not timed in';
           const hasAnomaly = !!loc.anomaly_flag;
-          const color = hasAnomaly ? 'var(--danger)' : isClockedIn ? 'var(--success)' : 'var(--text-3)';
+          const color = hasAnomaly ? 'var(--danger)' : isClockedIn ? 'var(--success)' : loc.clock_out ? 'var(--text-2)' : 'var(--text-3)';
 
           return (
             <div key={loc.student_id} style={{
@@ -623,7 +624,7 @@ L.default.Icon.Default.mergeOptions({
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 600, color }}>
-                  <span className="icon-label"><VectorIcon name={hasAnomaly ? 'alert' : isClockedIn ? 'success' : 'user'} size={13} /> {hasAnomaly ? 'Flagged' : isClockedIn ? 'Timed In' : 'Offline'}</span>
+                  <span className="icon-label"><VectorIcon name={hasAnomaly ? 'alert' : isClockedIn ? 'success' : 'user'} size={13} /> {hasAnomaly ? 'Flagged' : clockLabel}</span>
                 </div>
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: '0.1rem' }}>
                   {formatTime(loc.updated_at)}

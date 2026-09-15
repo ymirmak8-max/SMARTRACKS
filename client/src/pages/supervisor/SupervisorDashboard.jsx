@@ -242,6 +242,16 @@ const SupervisorDashboard = () => {
                       <p style={{ color: 'var(--text)', margin: '0.35rem 0 0', fontSize: '0.8rem', fontWeight: 600 }}>
                         {student.company_name || 'No company assigned'}
                       </p>
+                      <p style={{
+                        color: student.today_clock_in && !student.today_clock_out ? 'var(--success)' : 'var(--text-2)',
+                        margin: '0.25rem 0 0', fontSize: '0.78rem', fontWeight: 600,
+                      }}>
+                        {student.today_clock_in && !student.today_clock_out
+                          ? 'Timed in'
+                          : student.today_clock_out
+                            ? 'Timed out'
+                            : 'Not timed in today'}
+                      </p>
                       {student.company_address && (
                         <p style={{ color: 'var(--text-3)', margin: '0.1rem 0 0', fontSize: '0.78rem' }}>
                           {student.company_address}

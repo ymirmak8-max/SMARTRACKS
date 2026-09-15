@@ -582,10 +582,7 @@ export const getLiveLocations = async (req, res) => {
   try {
     let accessFilter = '';
     const params = [getBusinessDate()];
-    if (req.user.role === 'coordinator') {
-      accessFilter = 'AND d.coordinator_id = $2';
-      params.push(req.user.id);
-    } else if (req.user.role === 'supervisor') {
+    if (req.user.role === 'supervisor') {
       accessFilter = `AND (
         d.supervisor_id = $2
         OR (d.supervisor_id IS NULL AND d.company_id = (SELECT company_id FROM users WHERE id = $2))
@@ -595,11 +592,11 @@ export const getLiveLocations = async (req, res) => {
     const result = await pool.query(`
       SELECT
         d.student_id,
-        COALESCE(sl.latitude, tr.clock_in_lat) AS latitude,
-        COALESCE(sl.longitude, tr.clock_in_lng) AS longitude,
+        COALESCE(sl.latitude, tr.clock_in_lat, tr.clock_out_lat) AS latitude,
+        COALESCE(sl.longitude, tr.clock_in_lng, tr.clock_out_lng) AS longitude,
         sl.accuracy,
         COALESCE(sl.is_clocked_in, (tr.clock_in IS NOT NULL AND tr.clock_out IS NULL)) AS is_clocked_in,
-        COALESCE(sl.updated_at, tr.clock_in) AS updated_at,
+        COALESCE(sl.updated_at, tr.clock_out, tr.clock_in) AS updated_at,
         u.first_name, u.last_name, u.email,
         d.company_id,
         c.name AS company_name, cl.name AS worksite_name, cl.latitude AS office_lat,
@@ -613,13 +610,7 @@ export const getLiveLocations = async (req, res) => {
       LEFT JOIN time_records tr ON tr.student_id = d.student_id AND tr.date = $1
       WHERE d.status = 'active'
         ${accessFilter}
-        AND COALESCE(sl.latitude, tr.clock_in_lat) IS NOT NULL
-        AND COALESCE(sl.longitude, tr.clock_in_lng) IS NOT NULL
-        AND (
-          sl.updated_at > NOW() - INTERVAL '30 minutes'
-          OR (tr.clock_in IS NOT NULL AND tr.clock_out IS NULL)
-        )
-      ORDER BY COALESCE(sl.updated_at, tr.clock_in) DESC
+      ORDER BY COALESCE(sl.updated_at, tr.clock_out, tr.clock_in) DESC NULLS LAST, u.last_name ASC
     `, params);
 
     return res.status(200).json({ locations: result.rows });

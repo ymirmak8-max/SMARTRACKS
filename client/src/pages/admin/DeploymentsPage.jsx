@@ -175,9 +175,16 @@ const DeploymentsPage = ({ onBack: _onBack, onViewStudent = null, showHeader = t
                   <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{d.student_first} {d.student_last}</div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>{d.student_email}</div>
                 </div>
-                <span className={`badge ${d.status === 'active' ? 'badge-success' : 'badge-gray'}`} style={{ textTransform: 'capitalize', flexShrink: 0 }}>
-                  {d.status}
-                </span>
+                <div style={{ display: 'flex', gap: '0.35rem', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  <span className={`badge ${d.status === 'active' ? 'badge-success' : 'badge-gray'}`} style={{ textTransform: 'capitalize' }}>
+                    {d.status}
+                  </span>
+                  {d.status === 'active' && (
+                    <span className={`badge ${d.today_clock_in && !d.today_clock_out ? 'badge-success' : d.today_clock_out ? 'badge-gray' : 'badge-warning'}`}>
+                      {d.today_clock_in && !d.today_clock_out ? 'Timed in' : d.today_clock_out ? 'Timed out' : 'Not timed in'}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Details */}

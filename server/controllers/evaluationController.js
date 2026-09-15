@@ -12,12 +12,28 @@ export const getStudentsForSupervisor = async (req, res) => {
   d.id AS deployment_id, d.required_hours, d.start_date, d.end_date,
   c.name AS company_name, c.address AS company_address,
         COALESCE(SUM(tr.total_hours), 0) AS hours_rendered,
-        (SELECT json_agg(e.*) FROM evaluations e WHERE e.deployment_id = d.id) AS evaluations
+        (SELECT json_agg(e.*) FROM evaluations e WHERE e.deployment_id = d.id) AS evaluations,
+        (
+          SELECT clock_in FROM time_records today
+          WHERE today.student_id = u.id
+            AND today.date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::date
+          ORDER BY today.clock_in DESC NULLS LAST LIMIT 1
+        ) AS today_clock_in,
+        (
+          SELECT clock_out FROM time_records today
+          WHERE today.student_id = u.id
+            AND today.date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::date
+          ORDER BY today.clock_in DESC NULLS LAST LIMIT 1
+        ) AS today_clock_out
       FROM deployments d
       JOIN users u ON d.student_id = u.id
       LEFT JOIN companies c ON d.company_id = c.id
       LEFT JOIN time_records tr ON tr.student_id = u.id AND tr.is_valid = true
-      WHERE d.supervisor_id = $1 AND d.status = 'active'
+      WHERE d.status = 'active'
+        AND (
+          d.supervisor_id = $1
+          OR (d.supervisor_id IS NULL AND d.company_id = (SELECT company_id FROM users WHERE id = $1))
+        )
       GROUP BY u.id, u.first_name, u.last_name, u.email, u.course, u.school,
                d.id, d.required_hours, d.start_date, d.end_date, c.name, c.address
       ORDER BY u.last_name ASC
@@ -99,10 +115,13 @@ export const getEvaluations = async (req, res) => {
   try {
     const { deploymentId } = req.params;
 
-    if (req.user.role === 'supervisor' || req.user.role === 'coordinator') {
-      const ownerColumn = req.user.role === 'supervisor' ? 'supervisor_id' : 'coordinator_id';
+    if (req.user.role === 'supervisor') {
       const assignment = await pool.query(
-        `SELECT id FROM deployments WHERE id = $1 AND ${ownerColumn} = $2`,
+        `SELECT id FROM deployments
+         WHERE id = $1 AND (
+           supervisor_id = $2
+           OR (supervisor_id IS NULL AND company_id = (SELECT company_id FROM users WHERE id = $2))
+         )`,
         [deploymentId, req.user.id]
       );
       if (assignment.rows.length === 0)

@@ -10,7 +10,7 @@ const getAnthropicClient = () => {
 };
 
 const assignmentFilter = `(
-  ($2 = 'coordinator' AND d.coordinator_id = $3)
+  $2 = 'coordinator'
   OR ($2 = 'supervisor' AND d.supervisor_id = $3)
 )`;
 
@@ -569,8 +569,8 @@ Be specific, data-driven, and constructive. Format your response clearly with th
 // GET /api/analytics/overview — coordinator overview
 export const getOverviewAnalytics = async (req, res) => {
   try {
-    const coordinatorFilter = req.user.role === 'coordinator' ? 'AND d.coordinator_id = $1' : '';
-    const queryParams = req.user.role === 'coordinator' ? [req.user.id] : [];
+    const coordinatorFilter = '';
+    const queryParams = [];
     const [studentsRes, dtrRes, anomalyRes, docsRes] = await Promise.all([
       pool.query(`
         SELECT u.id, u.first_name, u.last_name, u.course,
@@ -687,7 +687,7 @@ Be specific and data-driven.
 
 export const getRiskDashboard = async (req, res) => {
   try {
-    const coordinatorId = req.user.role === 'coordinator' ? req.user.id : null;
+    const coordinatorId = null;
     const result = await pool.query(`
       SELECT
         u.id, u.first_name, u.last_name, u.email,

@@ -41,10 +41,10 @@ export const getStudentDocuments = async (req, res) => {
   try {
     const studentId = req.params.studentId || req.user.id;
 
-    if (req.user.role === 'coordinator') {
+    if (req.user.role === 'coordinator' && req.params.studentId) {
       const assignment = await pool.query(
-        `SELECT 1 FROM deployments WHERE student_id = $1 AND coordinator_id = $2 AND status = 'active'`,
-        [studentId, req.user.id]
+        `SELECT 1 FROM deployments WHERE student_id = $1 AND status = 'active'`,
+        [studentId]
       );
       if (!assignment.rows.length)
         return res.status(404).json({ message: 'Student not found or access denied.' });
@@ -176,7 +176,7 @@ export const reviewDocument = async (req, res) => {
              AND d.coordinator_id = $3 AND d.status = 'active'
          ))
        RETURNING *`,
-      [status, remarks || null, req.user.id, docId, req.user.role === 'coordinator']
+      [status, remarks || null, req.user.id, docId, false]
     );
 
     if (result.rows.length === 0)
