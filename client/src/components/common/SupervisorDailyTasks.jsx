@@ -109,14 +109,6 @@ const SupervisorDailyTasks = ({ onToast = () => {} }) => {
         eyebrow="OJT follow-up"
         title="Daily tasks"
         subtitle="Assign work for today, then track missing, in progress, completed, or excused items."
-        actions={(
-            <button type="button" className="btn-compact-primary icon-label" onClick={() => {
-            setForm({ title: '', description: '', studentIds: students.map((student) => student.id) });
-            setShowForm(true);
-          }}>
-            <VectorIcon name="plus" size={16} /> New task
-          </button>
-        )}
       />
 
       <div className="stat-grid stat-grid-fill daily-task-metrics">
@@ -127,10 +119,20 @@ const SupervisorDailyTasks = ({ onToast = () => {} }) => {
       </div>
 
       <div className="card daily-task-toolbar">
-        <label>
+        <label htmlFor="supervisor-task-date">
           <span>Task date</span>
-          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+          <input id="supervisor-task-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
         </label>
+        <button
+          type="button"
+          className="btn-compact-primary icon-label"
+          onClick={() => {
+            setForm({ title: '', description: '', studentIds: students.map((student) => student.id) });
+            setShowForm(true);
+          }}
+        >
+          <VectorIcon name="plus" size={16} /> New task
+        </button>
       </div>
 
       {loading ? <SkeletonPage variant="list" label="Loading tasks" /> : grouped.length === 0 ? (
@@ -144,22 +146,26 @@ const SupervisorDailyTasks = ({ onToast = () => {} }) => {
           <div className="daily-task-assignment-list">
             {group.assignments.map((assignment) => (
               <div className="daily-task-assignment" key={assignment.id}>
-                <div>
+                <div className="daily-task-assignment-identity">
                   <strong>{assignment.first_name} {assignment.last_name}</strong>
                   <span>{assignment.email}</span>
                   {assignment.excuse_remarks && <em>Excuse: {assignment.excuse_remarks}</em>}
                   {assignment.student_notes && <em>Trainee note: {assignment.student_notes}</em>}
                 </div>
-                <StatusBadge tone={statusTone[assignment.status] || 'gray'}>{statusLabel(assignment.status)}</StatusBadge>
-                {['missing', 'in_progress'].includes(assignment.status) && (
-                  <button
-                    type="button"
-                    className="action-btn action-btn-gray"
-                    onClick={() => { setExcuseTarget(assignment); setExcuseRemarks(''); }}
-                  >
-                    Mark excused
-                  </button>
-                )}
+                <div className="daily-task-assignment-status">
+                  <StatusBadge tone={statusTone[assignment.status] || 'gray'}>{statusLabel(assignment.status)}</StatusBadge>
+                </div>
+                <div className="daily-task-assignment-action">
+                  {['missing', 'in_progress'].includes(assignment.status) ? (
+                    <button
+                      type="button"
+                      className="action-btn action-btn-gray"
+                      onClick={() => { setExcuseTarget(assignment); setExcuseRemarks(''); }}
+                    >
+                      Mark excused
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
