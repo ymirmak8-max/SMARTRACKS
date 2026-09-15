@@ -2,7 +2,7 @@ import pool from '../config/db.js';
 import bcrypt from 'bcrypt';
 import { writeAuditLog } from '../utils/audit.js';
 import { sanitizePhone } from '../utils/phone.js';
-import { deleteStoredFile, IMAGE_TYPES, persistUpload } from '../utils/storage.js';
+import { deleteStoredFile, PROFILE_IMAGE_TYPES, persistUpload } from '../utils/storage.js';
 
 const loadAssignedCompanies = async (userId, role) => {
   const column = role === 'student' ? 'd.student_id' : role === 'supervisor' ? 'd.supervisor_id' : 'd.coordinator_id';
@@ -92,7 +92,7 @@ export const uploadProfilePicture = async (req, res) => {
     const profilePicture = await persistUpload(image, {
       folder: 'profiles',
       ownerId: req.user.id,
-      allowedTypes: IMAGE_TYPES,
+      allowedTypes: PROFILE_IMAGE_TYPES,
       maxBytes: 2 * 1024 * 1024,
     });
 

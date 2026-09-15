@@ -54,25 +54,40 @@ export const MetricCard = ({
   tone = 'primary',
   ariaLabel = null,
   role = 'region',
-}) => (
-  <article
-    className={`stat-card stat-card-${tone}`}
-    role={role}
-    aria-label={ariaLabel || label}
-  >
-    <span className="stat-accent" aria-hidden="true" />
-    {icon && <span className="stat-icon" aria-hidden="true">{icon}</span>}
-    <div className="stat-value" tabIndex={0} role="doc-numeric">
-      {value}
-    </div>
-    <div className="stat-label">{label}</div>
-    {detail && (
-      <div className="stat-detail" role="doc-subtitle">
-        {detail}
+  onClick = null,
+}) => {
+  const interactive = typeof onClick === 'function';
+  const handleKeyDown = (event) => {
+    if (!interactive) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onClick();
+    }
+  };
+
+  return (
+    <article
+      className={`stat-card stat-card-${tone}${interactive ? ' stat-card-clickable' : ''}`}
+      role={interactive ? 'button' : role}
+      aria-label={ariaLabel || (interactive ? `Open ${label}` : label)}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={interactive ? onClick : undefined}
+      onKeyDown={handleKeyDown}
+    >
+      <span className="stat-accent" aria-hidden="true" />
+      {icon && <span className="stat-icon" aria-hidden="true">{icon}</span>}
+      <div className="stat-value">
+        {value}
       </div>
-    )}
-  </article>
-);
+      <div className="stat-label">{label}</div>
+      {detail && (
+        <div className="stat-detail">
+          {detail}
+        </div>
+      )}
+    </article>
+  );
+};
 
 export const StatusBadge = ({
   tone = 'gray',

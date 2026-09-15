@@ -6,6 +6,8 @@ import {
 } from 'recharts';
 import VectorIcon from '../../components/common/VectorIcon';
 import SkeletonPage from '../../components/common/Skeleton';
+import { MetricCard } from '../../components/common/DashboardUI';
+import StudentTypeahead from '../../components/common/StudentTypeahead';
 
 const formatWeek = (value) => new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
   month: 'short', day: 'numeric',
@@ -47,11 +49,12 @@ const chartCardStyle = {
   background: 'linear-gradient(145deg, var(--surface) 0%, var(--surface-2) 160%)',
 };
 
-const AnalyticsPage = ({ students }) => {
+const AnalyticsPage = ({ students, onOpenStudents, onOpenProgress, onOpenRisks }) => {
   const [view, setView] = useState('overview');
   const [overviewData, setOverviewData] = useState(null);
   const [studentData, setStudentData] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState('');
+  const [studentSearch, setStudentSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -163,16 +166,22 @@ const AnalyticsPage = ({ students }) => {
             <>
               {/* Stats */}
               <div className="stat-grid stat-grid-3" style={{ marginBottom: '0.875rem' }}>
-                {[
-                  { label: 'Total Students', value: overviewData.stats.totalStudents, color: 'var(--primary)' },
-                  { label: 'Avg Progress', value: `${overviewData.stats.avgProgress}%`, color: 'var(--success)' },
-                  { label: 'At Risk', value: overviewData.stats.atRisk, color: 'var(--danger)' },
-                ].map(s => (
-                  <div key={s.label} className="stat-card">
-                    <div className="stat-value" style={{ color: s.color }}>{s.value}</div>
-                    <div className="stat-label">{s.label}</div>
-                  </div>
-                ))}
+                <MetricCard
+                  label="Total Students"
+                  value={overviewData.stats.totalStudents}
+                  onClick={onOpenStudents}
+                />
+                <MetricCard
+                  label="Avg Progress"
+                  value={`${overviewData.stats.avgProgress}%`}
+                  onClick={onOpenProgress || onOpenStudents}
+                />
+                <MetricCard
+                  label="At Risk"
+                  value={overviewData.stats.atRisk}
+                  tone="danger"
+                  onClick={onOpenRisks}
+                />
               </div>
 
               {/* AI Analysis */}
@@ -218,23 +227,25 @@ const AnalyticsPage = ({ students }) => {
           <div className="card" style={{ marginBottom: '0.875rem' }}>
             <div className="card-title">Select a deployed student</div>
             <div className="analytics-student-controls">
-              <select value={selectedStudent}
-                onChange={e => {
-                  setSelectedStudent(e.target.value);
+              <StudentTypeahead
+                id="analytics-find-student"
+                students={analyzableStudents}
+                value={studentSearch}
+                onChange={(next) => {
+                  setStudentSearch(next);
+                  if (!next) {
+                    setSelectedStudent('');
+                    setStudentData(null);
+                  }
+                }}
+                onSelect={(student) => {
+                  setStudentSearch(`${student.first_name || ''} ${student.last_name || ''}`.trim());
+                  setSelectedStudent(student.id);
                   setStudentData(null);
                 }}
-                aria-label="Choose a deployed student to analyze">
-                <option value="">
-                  {analyzableStudents.length
-                    ? 'Choose a student who is already assigned to a company'
-                    : 'No deployed students yet — assign a student first'}
-                </option>
-                {analyzableStudents.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.first_name} {s.last_name} — {s.company_name}
-                  </option>
-                ))}
-              </select>
+                label="Find student"
+                placeholder="Type a name to see matching students"
+              />
               <button onClick={() => fetchStudentAnalytics(selectedStudent)}
                 disabled={!selectedStudent || loading || !analyzableStudents.length}
                 type="button"

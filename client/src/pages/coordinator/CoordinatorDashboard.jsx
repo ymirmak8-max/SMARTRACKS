@@ -24,6 +24,7 @@ import WorkspacePane from '../../components/common/WorkspacePane';
 import SlidingSubnav from '../../components/common/SlidingSubnav';
 import SkeletonPage from '../../components/common/Skeleton';
 import NotificationPreferences from '../../components/common/NotificationPreferences';
+import StudentTypeahead from '../../components/common/StudentTypeahead';
 
 const AnalyticsPage = lazy(() => import('./AnalyticsPage'));
 const AttendanceExceptionsPage = lazy(() => import('../../components/common/AttendanceExceptionsPage'));
@@ -595,7 +596,14 @@ const CoordinatorDashboard = () => {
               ]}
             />
             <WorkspacePane key={insightView}>
-              {insightView === 'analytics' ? <AnalyticsPage students={students} /> : <RiskDashboard />}
+              {insightView === 'analytics' ? (
+                <AnalyticsPage
+                  students={students}
+                  onOpenStudents={() => { setStudentSection('all'); setActiveTab('deployments'); }}
+                  onOpenProgress={() => { setStudentSection('deployed'); setActiveTab('deployments'); }}
+                  onOpenRisks={() => openInsights('risks')}
+                />
+              ) : <RiskDashboard />}
             </WorkspacePane>
           </>
 
@@ -670,13 +678,9 @@ const CoordinatorDashboard = () => {
               ]}
             />
             <div className="stat-grid stat-grid-3" style={{ marginBottom: '0.875rem' }}>
-              {[
-                { label: 'Students', value: students.length, color: 'var(--primary)' },
-                { label: 'Anomalies', value: anomalies.length, color: 'var(--danger)' },
-                { label: 'Announcements', value: announcements.length, color: '#7C3AED' },
-              ].map(s => (
-                <MetricCard key={s.label} label={s.label} value={s.value} />
-              ))}
+              <MetricCard label="Students" value={students.length} onClick={() => { setStudentSection('all'); setActiveTab('deployments'); }} />
+              <MetricCard label="Anomalies" value={anomalies.length} tone="danger" onClick={() => openReviews('anomalies')} />
+              <MetricCard label="Announcements" value={announcements.length} onClick={() => setActiveTab('announcements')} />
             </div>
             <div className="card" style={{ marginBottom: '0.875rem' }}>
               <div className="card-title">Company Perimeter</div>
@@ -743,17 +747,23 @@ const CoordinatorDashboard = () => {
               </div>
             </section>
             <div className="stat-grid stat-grid-3 coordinator-overview-metrics">
-              <MetricCard label="Deployed" value={deployedStudents.length} detail="Active company assignments" icon={<VectorIcon name="briefcase" size={18} />} />
-              <MetricCard label="Awaiting assignment" value={undeployedStudents.length} detail="Approved students to deploy" tone="warning" icon={<VectorIcon name="users" size={18} />} />
-              <MetricCard label="Open anomalies" value={anomalies.length} detail="Attendance records to inspect" tone="danger" icon={<VectorIcon name="calendar" size={18} />} />
+              <MetricCard label="Deployed" value={deployedStudents.length} detail="Active company assignments" icon={<VectorIcon name="briefcase" size={18} />} onClick={() => setStudentSection('deployed')} />
+              <MetricCard label="Awaiting assignment" value={undeployedStudents.length} detail="Approved students to deploy" tone="warning" icon={<VectorIcon name="users" size={18} />} onClick={() => setStudentSection('awaiting')} />
+              <MetricCard label="Open anomalies" value={anomalies.length} detail="Attendance records to inspect" tone="danger" icon={<VectorIcon name="calendar" size={18} />} onClick={() => openReviews('anomalies')} />
             </div>
             <div className="student-directory-toolbar" role="search" aria-label="Search and filter students">
-              <input
-                type="search"
+              <StudentTypeahead
+                id="coordinator-find-student"
+                students={students}
                 value={studentQuery}
-                onChange={event => setStudentQuery(event.target.value)}
-                placeholder="Search by student name, ID, or email"
-                aria-label="Search students by name, ID, or email"
+                onChange={setStudentQuery}
+                onSelect={(student) => {
+                  setStudentQuery(`${student.first_name || ''} ${student.last_name || ''}`.trim());
+                  if (student.deployment_id) handleSelectStudent(student);
+                  else setStudentSection('awaiting');
+                }}
+                label="Find student"
+                placeholder="Type a name to see matching students"
               />
               <select
                 value={studentSection}

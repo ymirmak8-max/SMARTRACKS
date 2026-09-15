@@ -5,6 +5,7 @@ import ConfirmDialog from './ConfirmDialog';
 import EmptyState from './EmptyState';
 import { MetricCard, PageHeader } from './DashboardUI';
 import SkeletonPage from './Skeleton';
+import StudentTypeahead from './StudentTypeahead';
 
 const dateLabel = value => value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 const timeLabel = value => value ? new Date(value).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
@@ -51,6 +52,23 @@ const AttendanceReviewCenter = ({ canDeleteImages = false, onToast = () => {} })
       return matchesStatus && matchesDate && (!needle || haystack.includes(needle));
     });
   }, [date, query, records, status]);
+
+  const studentOptions = useMemo(() => {
+    const unique = new Map();
+    records.forEach((record) => {
+      const id = record.student_id || record.email || `${record.first_name}-${record.last_name}`;
+      if (!unique.has(id)) {
+        unique.set(id, {
+          id,
+          first_name: record.first_name,
+          last_name: record.last_name,
+          email: record.email,
+          company_name: record.company_name,
+        });
+      }
+    });
+    return [...unique.values()];
+  }, [records]);
 
   const openPhoto = async (record, imageType) => {
     const url = imageType === 'clock_in' ? record.selfie_in_url : record.selfie_out_url;
@@ -102,7 +120,14 @@ const AttendanceReviewCenter = ({ canDeleteImages = false, onToast = () => {} })
     </div>
 
     <div className="card attendance-review-toolbar">
-      <label className="attendance-review-search"><span>Find student</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search by student name, email, or company" /></label>
+      <StudentTypeahead
+        id="attendance-find-student"
+        students={studentOptions}
+        value={query}
+        onChange={setQuery}
+        label="Find student"
+        placeholder="Type a name to see matching students"
+      />
       <label><span>Date</span><input type="date" value={date} onChange={event => setDate(event.target.value)} /></label>
       <label><span><VectorIcon name="filter" size={14} /> Status</span><select value={status} onChange={event => setStatus(event.target.value)}><option value="pending">Needs review</option><option value="all">All records</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select></label>
     </div>

@@ -12,6 +12,17 @@ try {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS users_company_id_idx ON users (company_id)');
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS stored_files (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      mime_type VARCHAR(100) NOT NULL,
+      content BYTEA NOT NULL,
+      byte_size INT NOT NULL CHECK (byte_size > 0),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS stored_files_owner_created_idx ON stored_files (owner_id, created_at DESC)');
+  await pool.query(`
     UPDATE system_settings
     SET value = jsonb_set(value, '{maximumGpsAccuracyMeters}', '100'::jsonb),
         updated_at = NOW()

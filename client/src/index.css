@@ -5604,3 +5604,80 @@ input.eval-score-field[type='number'] {
   color: var(--danger);
   background: var(--danger-light);
 }
+
+.stat-card-clickable {
+  cursor: pointer;
+}
+.stat-card-clickable:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+.stat-card-clickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.student-typeahead {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  position: relative;
+}
+.student-typeahead > label {
+  color: var(--text-2);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+.student-typeahead-field {
+  position: relative;
+  min-width: 0;
+}
+.student-typeahead-field input {
+  width: 100%;
+}
+.student-typeahead-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  max-height: 16rem;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+.student-typeahead-menu li {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.student-typeahead-menu li strong {
+  font-size: 0.86rem;
+  color: var(--text);
+}
+.student-typeahead-menu li span {
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+.student-typeahead-menu li.is-active,
+.student-typeahead-menu li:hover {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.student-typeahead-empty {
+  cursor: default;
+  color: var(--text-3);
+  font-size: 0.82rem;
+  padding: 0.65rem 0.7rem;
+}
+.student-directory-toolbar .student-typeahead,
+.analytics-student-controls .student-typeahead,
+.attendance-review-toolbar .student-typeahead {
+  width: 100%;
+}

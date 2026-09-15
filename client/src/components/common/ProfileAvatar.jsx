@@ -4,7 +4,8 @@ import api from '../../api/axios';
 import useAuth from '../../hooks/useAuth';
 
 const MAX_BYTES = 2 * 1024 * 1024;
-const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+const MAX_EDGE = 720;
+const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
 const fileApiPath = (src) => {
   if (!src) return null;
@@ -19,6 +20,27 @@ const readAsDataUrl = (file) => new Promise((resolve, reject) => {
   reader.onerror = () => reject(new Error('The photo could not be read.'));
   reader.readAsDataURL(file);
 });
+
+const compressPhoto = async (file) => {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas unavailable.');
+    context.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.84);
+    if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/jpeg')) return dataUrl;
+  } catch {
+    /* Fall through to the original file when the browser cannot decode HEIC/WEBP. */
+  }
+  return readAsDataUrl(file);
+};
 
 const UserAvatar = ({ src, initials, size = 64, className = '' }) => {
   const [displaySrc, setDisplaySrc] = useState(null);
@@ -80,14 +102,14 @@ const ProfileAvatar = ({ initials, size = 64, onToast }) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    const namedImage = /\.(jpe?g|png)$/i.test(file.name || '');
+    const namedImage = /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || '');
     if (!ALLOWED_TYPES.includes(file.type) && !(file.type === '' && namedImage))
-      return onToast?.('Use a JPG or PNG photo.', 'error');
+      return onToast?.('Use a JPG, PNG, or WEBP photo.', 'error');
     if (file.size > MAX_BYTES)
       return onToast?.('Photo must be smaller than 2 MB.', 'error');
     setBusy(true);
     try {
-      const image = await readAsDataUrl(file);
+      const image = await compressPhoto(file);
       const response = await uploadProfilePicture(image);
       applyPicture(response.data.profilePicture || response.data.profile_picture);
       onToast?.('Profile photo updated.');
@@ -118,7 +140,7 @@ const ProfileAvatar = ({ initials, size = 64, onToast }) => {
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic"
           hidden
           onChange={handleFile}
         />
