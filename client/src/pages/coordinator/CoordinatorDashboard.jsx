@@ -765,15 +765,18 @@ const CoordinatorDashboard = () => {
                 label="Find student"
                 placeholder="Type a name to see matching students"
               />
-              <select
-                value={studentSection}
-                onChange={event => setStudentSection(event.target.value)}
-                aria-label="Filter student section"
-              >
-                <option value="all">All students</option>
-                <option value="awaiting">Awaiting assignment</option>
-                <option value="deployed">Deployed</option>
-              </select>
+              <div className="student-directory-filter">
+                <label htmlFor="coordinator-student-section">Show</label>
+                <select
+                  id="coordinator-student-section"
+                  value={studentSection}
+                  onChange={event => setStudentSection(event.target.value)}
+                >
+                  <option value="all">All students</option>
+                  <option value="awaiting">Awaiting assignment</option>
+                  <option value="deployed">Deployed</option>
+                </select>
+              </div>
             </div>
             {studentSection !== 'deployed' && undeployedStudents.length > 0 && (
               <CollapsibleSection

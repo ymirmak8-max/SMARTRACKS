@@ -135,6 +135,7 @@ const UserMenu = ({ onEditProfile, placement = 'chrome', compact = false }) => {
             src={user?.profilePicture || user?.profile_picture}
             initials={initials}
             size={44}
+            previewable
           />
           <div className="user-menu-panel-copy">
             <div className="user-menu-panel-name">{user?.first_name} {user?.last_name}</div>

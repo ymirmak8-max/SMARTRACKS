@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { uploadProfilePicture, removeProfilePicture } from '../../api/profile';
 import api from '../../api/axios';
 import useAuth from '../../hooks/useAuth';
@@ -6,6 +7,7 @@ import useAuth from '../../hooks/useAuth';
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_EDGE = 720;
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+const blobUrlCache = new Map();
 
 const fileApiPath = (src) => {
   if (!src) return null;
@@ -42,49 +44,93 @@ const compressPhoto = async (file) => {
   return readAsDataUrl(file);
 };
 
-const UserAvatar = ({ src, initials, size = 64, className = '' }) => {
+const resolveAvatarSrc = async (src) => {
+  const path = fileApiPath(src);
+  if (!path) return null;
+  if (path.startsWith('data:') || path.startsWith('blob:') || /^https?:\/\//i.test(path)) return path;
+  if (blobUrlCache.has(path)) return blobUrlCache.get(path);
+  const response = await api.get(path, { responseType: 'blob' });
+  const objectUrl = URL.createObjectURL(response.data);
+  blobUrlCache.set(path, objectUrl);
+  return objectUrl;
+};
+
+const UserAvatar = ({ src, initials, size = 64, className = '', previewable = false }) => {
   const [displaySrc, setDisplaySrc] = useState(null);
   const [failed, setFailed] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
-    let objectUrl;
     let cancelled = false;
     setFailed(false);
-    setDisplaySrc(null);
-    if (!src) return undefined;
+    if (!src) {
+      setDisplaySrc(null);
+      return undefined;
+    }
 
     const load = async () => {
-      const path = fileApiPath(src);
-      if (!path) return;
-      if (path.startsWith('data:') || path.startsWith('blob:') || /^https?:\/\//i.test(path)) {
-        if (!cancelled) setDisplaySrc(path);
-        return;
-      }
       try {
-        const response = await api.get(path, { responseType: 'blob' });
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(response.data);
-        setDisplaySrc(objectUrl);
+        const next = await resolveAvatarSrc(src);
+        if (!cancelled && next) setDisplaySrc(next);
       } catch {
         if (!cancelled) setFailed(true);
       }
     };
     load();
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
+    return () => { cancelled = true; };
   }, [src]);
 
+  useEffect(() => {
+    if (!previewOpen) return undefined;
+    const close = (event) => {
+      if (event.key === 'Escape') setPreviewOpen(false);
+    };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [previewOpen]);
+
   const showImage = displaySrc && !failed;
+  const openPreview = () => {
+    if (previewable && showImage) setPreviewOpen(true);
+  };
+
   return (
-    <div className={`profile-avatar ${className}`.trim()} style={{ width: size, height: size }} aria-hidden="true">
-      {showImage ? (
-        <img src={displaySrc} alt="" onError={() => setFailed(true)} />
+    <>
+      {previewable && showImage ? (
+        <button
+          type="button"
+          className={`profile-avatar profile-avatar-preview ${className}`.trim()}
+          style={{ width: size, height: size }}
+          onClick={openPreview}
+          aria-label="View full profile photo"
+        >
+          <img src={displaySrc} alt="" onError={() => setFailed(true)} />
+        </button>
       ) : (
-        <span>{initials || '?'}</span>
+        <div className={`profile-avatar ${className}`.trim()} style={{ width: size, height: size }} aria-hidden="true">
+          {showImage ? (
+            <img src={displaySrc} alt="" onError={() => setFailed(true)} />
+          ) : (
+            <span>{initials || '?'}</span>
+          )}
+        </div>
       )}
-    </div>
+      {previewOpen && showImage && createPortal(
+        <div
+          className="modal-overlay profile-photo-overlay"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewOpen(false); }}
+        >
+          <div className="modal-content profile-photo-modal" role="dialog" aria-modal="true" aria-label="Profile photo">
+            <div className="profile-photo-header">
+              <h2 className="modal-title">Profile photo</h2>
+              <button type="button" className="action-btn action-btn-gray" onClick={() => setPreviewOpen(false)}>Close</button>
+            </div>
+            <img className="profile-photo-full" src={displaySrc} alt="Full profile photo" />
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 };
 
@@ -107,13 +153,16 @@ const ProfileAvatar = ({ initials, size = 64, onToast }) => {
       return onToast?.('Use a JPG, PNG, or WEBP photo.', 'error');
     if (file.size > MAX_BYTES)
       return onToast?.('Photo must be smaller than 2 MB.', 'error');
+    const previous = picture;
     setBusy(true);
     try {
       const image = await compressPhoto(file);
+      applyPicture(image);
       const response = await uploadProfilePicture(image);
       applyPicture(response.data.profilePicture || response.data.profile_picture);
       onToast?.('Profile photo updated.');
     } catch (error) {
+      applyPicture(previous || null);
       onToast?.(error.response?.data?.message || 'The photo could not be uploaded.', 'error');
     } finally {
       setBusy(false);
@@ -121,12 +170,14 @@ const ProfileAvatar = ({ initials, size = 64, onToast }) => {
   };
 
   const handleRemove = async () => {
+    const previous = picture;
+    applyPicture(null);
     setBusy(true);
     try {
       await removeProfilePicture();
-      applyPicture(null);
       onToast?.('Profile photo removed.');
     } catch (error) {
+      applyPicture(previous || null);
       onToast?.(error.response?.data?.message || 'The photo could not be removed.', 'error');
     } finally {
       setBusy(false);
@@ -135,7 +186,7 @@ const ProfileAvatar = ({ initials, size = 64, onToast }) => {
 
   return (
     <div className="profile-avatar-editor">
-      <UserAvatar src={picture} initials={initials} size={size} />
+      <UserAvatar src={picture} initials={initials} size={size} previewable />
       <div className="profile-avatar-actions">
         <input
           ref={inputRef}
