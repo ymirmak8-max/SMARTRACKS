@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "npm ci --prefix client && npm ci --prefix server --omit=dev",
+  "installCommand": "npm ci --prefix client --no-audit --no-fund && npm ci --prefix server --omit=dev --no-audit --no-fund",
   "buildCommand": "npm run build --prefix client",
   "outputDirectory": "client/dist",
   "rewrites": [
@@ -13,8 +13,5 @@
       "path": "/api/cron/workers",
       "schedule": "0 10 * * *"
     }
-  ],
-  "env": {
-    "VITE_API_URL": "/api"
-  }
+  ]
 }
