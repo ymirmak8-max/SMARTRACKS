@@ -1,0 +1,36 @@
+{
+  "name": "smartrack-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "start:production": "npm run migrate && node server.js",
+    "migrate": "node scripts/migrate.js",
+    "seed:staging": "node scripts/seed-staging.js",
+    "backup": "node scripts/backup.js",
+    "verify:backup": "node scripts/verify-backup.js",
+    "verify:restore": "node scripts/verify-backup-restore.js",
+    "verify:security": "node scripts/verify-security-hardening.js",
+    "generate:vapid": "web-push generate-vapid-keys",
+    "test:database": "node scripts/run-database-tests.js",
+    "test": "node --test --test-concurrency=1"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.5",
+    "sharp": "^0.35.3",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
