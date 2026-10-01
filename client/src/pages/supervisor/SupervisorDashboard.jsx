@@ -11,13 +11,18 @@ import ReportSchedulerModal from '../../components/common/ReportSchedulerModal';
 import ExportHistoryModal from '../../components/common/ExportHistoryModal';
 import VectorIcon from '../../components/common/VectorIcon';
 import SupervisorLiveMap from '../../components/common/SupervisorLiveMap';
-import AttendanceReviewCenter from '../../components/common/AttendanceReviewCenter';
 import useDashboardNavigation from '../../hooks/useDashboardNavigation';
+import { useTheme } from '../../context/ThemeContext';
+import { getStudentActivity } from '../../api/supervisor';
+import { getNotifications, markAsRead, markAllAsRead } from '../../api/notifications';
+import { getAnnouncements } from '../../api/coordinator';
 import NotificationPreferences from '../../components/common/NotificationPreferences';
 import WorkspacePane from '../../components/common/WorkspacePane';
 import SkeletonPage from '../../components/common/Skeleton';
 import { getProfile } from '../../api/profile';
 import ProfileAvatar from '../../components/common/ProfileAvatar';
+import SecureImage from '../../components/common/SecureImage';
+import DocViewerModal from '../../components/common/DocViewerModal';
 import SupervisorDailyTasks from '../../components/common/SupervisorDailyTasks';
 import SupervisorStudentActivity from '../../components/common/SupervisorStudentActivity';
 
@@ -31,13 +36,21 @@ const RUBRIC_CRITERIA = [
 ];
 
 const INITIAL_SCORES = RUBRIC_CRITERIA.reduce((acc, c) => ({ ...acc, [c.key]: 85 }), {});
-const SUPERVISOR_VIEWS = ['students', 'activity', 'map', 'attendance', 'tasks', 'account'];
+const SUPERVISOR_VIEWS = ['students', 'activity', 'tasks', 'map', 'account'];
 const clockTime = (value) => (value
   ? new Date(value).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })
   : '—');
+const dayShort = (value) => {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return value || '—';
+  return new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00`).toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+  });
+};
 
 const SupervisorDashboard = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -58,6 +71,11 @@ const SupervisorDashboard = () => {
   const [profile, setProfile] = useState(null);
   const [studentQuery, setStudentQuery] = useState('');
   const [openStudentId, setOpenStudentId] = useState(null);
+  const [activityCache, setActivityCache] = useState({});
+  const [activityLoadingId, setActivityLoadingId] = useState(null);
+  const [updates, setUpdates] = useState([]);
+  const [showUpdates, setShowUpdates] = useState(false);
+  const [cardPhoto, setCardPhoto] = useState(null);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast(msg); setToastType(type);
@@ -79,12 +97,74 @@ const SupervisorDashboard = () => {
     getProfile().then(res => setProfile(res.data.user)).catch(() => {});
   }, []);
 
+  const fetchUpdates = useCallback(async () => {
+    try {
+      const [notifRes, annRes] = await Promise.all([
+        getNotifications().catch(() => ({ data: { notifications: [] } })),
+        getAnnouncements().catch(() => ({ data: { announcements: [] } })),
+      ]);
+      const readKey = user ? `smartrack:read-announcements:${user.id}` : null;
+      let readIds = new Set();
+      try { readIds = new Set(JSON.parse(localStorage.getItem(readKey) || '[]')); } catch {}
+      const items = (notifRes.data.notifications || []).map(n => ({
+        id: n.id, title: n.title, body: n.body, read: !!n.is_read, kind: 'notification',
+      }));
+      (annRes.data.announcements || []).forEach(a => {
+        items.push({
+          id: `ann-${a.id}`, rawId: a.id, title: a.title, body: a.body,
+          read: readIds.has(String(a.id)), kind: 'announcement',
+        });
+      });
+      setUpdates(items.slice(0, 5));
+    } catch { /* Updates stay hidden when unavailable. */ }
+  }, [user?.id]);
+
+  useEffect(() => { fetchUpdates(); }, [fetchUpdates]);
+
+  const openUpdate = async (item) => {
+    if (!item || item.read) return;
+    if (item.kind === 'announcement' && user) {
+      const key = `smartrack:read-announcements:${user.id}`;
+      try {
+        const ids = new Set(JSON.parse(localStorage.getItem(key) || '[]'));
+        ids.add(String(item.rawId));
+        localStorage.setItem(key, JSON.stringify([...ids].slice(-200)));
+      } catch {}
+      setUpdates(current => current.map(u => u.id === item.id ? { ...u, read: true } : u));
+    } else {
+      try { await markAsRead(item.id); } catch {}
+      setUpdates(current => current.map(u => u.id === item.id ? { ...u, read: true } : u));
+    }
+  };
+
+  const readAllUpdates = async () => {
+    try { await markAllAsRead(); } catch {}
+    setUpdates(current => current.map(u => ({ ...u, read: true })));
+  };
+
+  const toggleStudent = (student) => {
+    const isOpen = openStudentId === student.id;
+    setOpenStudentId(isOpen ? null : student.id);
+    if (!isOpen && !activityCache[student.id]) {
+      setActivityLoadingId(student.id);
+      getStudentActivity(student.id)
+        .then(res => setActivityCache(current => ({ ...current, [student.id]: res.data })))
+        .catch(() => {})
+        .finally(() => setActivityLoadingId(current => (current === student.id ? null : current)));
+    }
+  };
+
   const openActivity = useCallback((studentId) => {
     const params = new URLSearchParams();
     params.set('view', 'activity');
     if (studentId) params.set('student', studentId);
     navigate({ pathname: location.pathname, search: `?${params.toString()}` });
   }, [location.pathname, navigate]);
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  }, [logout, navigate]);
 
   const handleOpenEval = (student, period) => {
     setSelectedStudent(student);
@@ -156,7 +236,7 @@ const SupervisorDashboard = () => {
     { key: 'activity', icon: <VectorIcon name="activity" size={20} />, label: 'Activity' },
     { key: 'tasks', icon: <VectorIcon name="clipboard" size={20} />, label: 'Tasks' },
     { key: 'map', icon: <VectorIcon name="map" size={20} />, label: 'Map' },
-    { key: 'attendance', icon: <VectorIcon name="calendar" size={20} />, label: 'Attendance' },
+    { key: 'account', icon: <VectorIcon name="user" size={20} />, label: 'Profile' },
   ];
 
   return (
@@ -189,8 +269,6 @@ const SupervisorDashboard = () => {
           />
         ) : activeTab === 'tasks' ? (
           <SupervisorDailyTasks onToast={showToast} />
-        ) : activeTab === 'attendance' ? (
-          <AttendanceReviewCenter onToast={showToast} defaultStatus="all" />
         ) : activeTab === 'account' ? (
           <div className="sup-acc">
             <section className="sup-acc-hero" aria-label="Supervisor account">
@@ -226,11 +304,79 @@ const SupervisorDashboard = () => {
             </div>
             <NotificationPreferences />
 
+            <div className="card sup-acc-appear">
+              <span>Appearance</span>
+              <div className="profile-theme-seg" role="group" aria-label="Appearance">
+                <button
+                  type="button"
+                  className={`profile-theme-btn${theme === 'light' ? ' is-on' : ''}`}
+                  aria-pressed={theme === 'light'}
+                  onClick={() => theme !== 'light' && toggleTheme()}
+                >
+                  Light
+                </button>
+                <button
+                  type="button"
+                  className={`profile-theme-btn${theme === 'dark' ? ' is-on' : ''}`}
+                  aria-pressed={theme === 'dark'}
+                  onClick={() => theme !== 'dark' && toggleTheme()}
+                >
+                  Dark
+                </button>
+              </div>
+            </div>
+
+            <button type="button" className="profile-signout" onClick={handleLogout}>
+              Sign out
+            </button>
+
           </div>
 
         ) : (
 
           <div className="sup-stu">
+            {updates.length > 0 && (
+              <div className="home-updates">
+                <button
+                  type="button"
+                  className="home-updates-toggle"
+                  aria-expanded={showUpdates}
+                  onClick={() => setShowUpdates(value => !value)}
+                >
+                  <VectorIcon name="bell" size={15} />
+                  Notifications
+                  {updates.filter(u => !u.read).length > 0 && (
+                    <b>{updates.filter(u => !u.read).length}</b>
+                  )}
+                  <VectorIcon name="chevronRight" size={15} className={showUpdates ? 'is-open' : ''} />
+                </button>
+                {showUpdates && (
+                  <>
+                    <div className="home-updates-list">
+                      {updates.map(item => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={`home-update${item.read ? ' is-read' : ''}`}
+                          onClick={() => openUpdate(item)}
+                        >
+                          <i aria-hidden="true" />
+                          <span>
+                            <strong>{item.title}</strong>
+                            {item.body && <small>{item.body}</small>}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {updates.some(u => !u.read) && (
+                      <button type="button" className="home-updates-readall" onClick={readAllUpdates}>
+                        Mark all read
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
             <section className="sup-stu-hero" aria-label="My students summary">
               <div className="sup-stu-glow" aria-hidden="true" />
               <p className="sup-stu-eyebrow"><VectorIcon name="users" size={12} /> My trainees</p>
@@ -295,7 +441,7 @@ const SupervisorDashboard = () => {
                     <button
                       type="button"
                       className="sup-stu-head"
-                      onClick={() => setOpenStudentId(isOpen ? null : student.id)}
+                      onClick={() => toggleStudent(student)}
                       aria-expanded={isOpen}
                       aria-label={`${student.first_name} ${student.last_name}, ${progressPercent} percent complete`}
                     >
@@ -328,6 +474,49 @@ const SupervisorDashboard = () => {
                         </p>
                         {student.school && <p className="sup-stu-meta">{student.school}</p>}
                         <p className="sup-stu-meta">{student.email}</p>
+                        <p className="dep-mini-label">Recent attendance</p>
+                        {activityLoadingId === student.id ? (
+                          <p className="sup-stu-meta">Loading attendance…</p>
+                        ) : (() => {
+                          const records = (activityCache[student.id]?.records || []).slice(0, 5);
+                          if (!records.length) return <p className="sup-stu-meta">No attendance records yet.</p>;
+                          return (
+                            <div className="sup-att-list">
+                              {records.map(record => {
+                                const state = record.clock_in && !record.clock_out
+                                  ? { label: `In · ${clockTime(record.clock_in)}`, color: 'var(--success)' }
+                                  : record.anomaly_flag
+                                    ? { label: 'Flagged', color: 'var(--danger)' }
+                                    : record.clock_out
+                                      ? { label: `${clockTime(record.clock_in)} – ${clockTime(record.clock_out)}`, color: 'var(--text-3)' }
+                                      : { label: 'No record', color: 'var(--text-3)' };
+                                return (
+                                  <div className="sup-att-row" key={record.id || record.date}>
+                                    <span className="sup-att-dot" style={{ background: state.color }} aria-hidden="true" />
+                                    <span className="sup-att-copy">
+                                      <strong>{dayShort(record.date)}</strong>
+                                      <small>{state.label}</small>
+                                    </span>
+                                    {(record.selfie_in_url || record.selfie_out_url) && (
+                                      <span className="sup-att-thumbs">
+                                        {record.selfie_in_url && (
+                                          <button type="button" onClick={() => setCardPhoto({ url: record.selfie_in_url, name: `Time in · ${student.first_name} ${student.last_name} · ${dayShort(record.date)}` })} aria-label={`View time-in photo for ${dayShort(record.date)}`}>
+                                            <SecureImage src={record.selfie_in_url} alt="" />
+                                          </button>
+                                        )}
+                                        {record.selfie_out_url && (
+                                          <button type="button" onClick={() => setCardPhoto({ url: record.selfie_out_url, name: `Time out · ${student.first_name} ${student.last_name} · ${dayShort(record.date)}` })} aria-label={`View time-out photo for ${dayShort(record.date)}`}>
+                                            <SecureImage src={record.selfie_out_url} alt="" />
+                                          </button>
+                                        )}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                         <button
                           type="button"
                           className="sup-stu-activity"
@@ -383,6 +572,9 @@ const SupervisorDashboard = () => {
       <DashboardBottomNav items={NAV} activeKey={activeTab} onChange={setActiveTab} />
 
       {/* Evaluation Modal */}
+      {cardPhoto && (
+        <DocViewerModal file={cardPhoto} onClose={() => setCardPhoto(null)} />
+      )}
       {showEvalModal && selectedStudent && (
         <div className="modal-overlay">
           <div className="modal-content">

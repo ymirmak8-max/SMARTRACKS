@@ -1,12 +1,15 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   getDeployedStudents, getStudentDetail,
-  getAnomalyReport, createAnnouncement, getAnnouncements, logAttendanceImageView, deleteAttendanceImage,
+  getAnomalyReport, logAttendanceImageView, deleteAttendanceImage,
 } from '../../api/coordinator';
 import { reviewDocument } from '../../api/documents';
 import { exportAnalyticsAsCSV, scheduleReport, downloadCSV } from '../../api/exports';
 import useAuth from '../../hooks/useAuth';
+import { useTheme } from '../../context/ThemeContext';
 import EmptyState from '../../components/common/EmptyState';
+import { UpdatesToggle } from '../../components/common/NotificationFeed';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
 import SecureImage from '../../components/common/SecureImage';
 import { AccountIdentityCard, PageHeader, safePercent } from '../../components/common/DashboardUI';
@@ -23,7 +26,6 @@ import useDashboardNavigation from '../../hooks/useDashboardNavigation';
 import useTransientToast from '../../hooks/useTransientToast';
 import CollapsibleSection from '../../components/common/CollapsibleSection';
 import WorkspacePane from '../../components/common/WorkspacePane';
-import SlidingSubnav from '../../components/common/SlidingSubnav';
 import SkeletonPage from '../../components/common/Skeleton';
 import NotificationPreferences from '../../components/common/NotificationPreferences';
 import SecuritySettings from '../../components/common/SecuritySettings';
@@ -40,26 +42,23 @@ const DocumentRequirementsManager = lazy(() => import('../../components/common/D
 const UserManagementPanel = lazy(() => import('../../components/common/UserManagementPanel'));
 const SystemHealthPanel = lazy(() => import('../../components/common/SystemHealthPanel'));
 
-const COORDINATOR_VIEWS = ['deployments', 'map', 'insights', 'reviews', 'analytics', 'risks', 'attendance', 'requests', 'completion',
-  'account', 'settings', 'requirements', 'anomalies', 'announcements', 'users', 'health'];
+const COORDINATOR_VIEWS = ['deployments', 'map', 'insights', 'analytics', 'risks', 'attendance', 'requests', 'completion',
+  'account', 'settings', 'requirements', 'anomalies', 'users', 'health'];
 
 const CoordinatorDashboard = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+const { theme, toggleTheme } = useTheme();
+const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useDashboardNavigation('deployments', COORDINATOR_VIEWS);
-  const [insightView, setInsightView] = useState('analytics');
-  const [reviewView, setReviewView] = useState('attendance');
+const [insightTab, setInsightTab] = useState('analytics');
   const [students, setStudents] = useState([]);
   const [anomalies, setAnomalies] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentDetail, setStudentDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
   const { toast, toastType, showToast } = useTransientToast(6000);
-  const [showAnnouncement, setShowAnnouncement] = useState(false);
-  const [announcementForm, setAnnouncementForm] = useState({ title: '', body: '', targetRole: '' });
-  const [announcementLoading, setAnnouncementLoading] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [reviewTarget, setReviewTarget] = useState(null);
   const [reviewForm, setReviewForm] = useState({ status: 'approved', remarks: '' });
@@ -82,11 +81,10 @@ const CoordinatorDashboard = () => {
 
   const fetchAll = useCallback(async () => {
     const results = await Promise.allSettled([
-      getDeployedStudents(), getAnomalyReport(), getAnnouncements(),
+      getDeployedStudents(), getAnomalyReport(),
     ]);
     if (results[0].status === 'fulfilled') setStudents(results[0].value.data.students || []);
     if (results[1].status === 'fulfilled') setAnomalies(results[1].value.data.anomalies || []);
-    if (results[2].status === 'fulfilled') setAnnouncements(results[2].value.data.announcements || []);
     if (results.some(result => result.status === 'rejected')) showToast('Some dashboard data could not be loaded.', 'error');
   }, [showToast]);
 
@@ -95,12 +93,9 @@ const CoordinatorDashboard = () => {
     getProfile().then(res => setProfile(res.data.user)).catch(() => {});
   }, []);
   useEffect(() => {
-    if (activeTab === 'analytics' || activeTab === 'risks') {
-      setInsightView(activeTab);
+    if (['analytics', 'risks', 'attendance', 'requests', 'completion', 'anomalies'].includes(activeTab)) {
+      setInsightTab(activeTab);
       setActiveTab('insights');
-    } else if (['attendance', 'requests', 'completion', 'anomalies'].includes(activeTab)) {
-      setReviewView(activeTab);
-      setActiveTab('reviews');
     }
   }, [activeTab, setActiveTab]);
   useEffect(() => {
@@ -132,19 +127,6 @@ const CoordinatorDashboard = () => {
       showToast(message, 'error');
     }
     finally { setDetailLoading(false); }
-  };
-
-  const handleCreateAnnouncement = async (e) => {
-    e.preventDefault(); setAnnouncementLoading(true);
-    try {
-      const response = await createAnnouncement(announcementForm);
-      setAnnouncements(current => [response.data.announcement, ...current.filter(item => item.id !== response.data.announcement.id)]);
-      showToast('Announcement posted.');
-      setShowAnnouncement(false);
-      setAnnouncementForm({ title: '', body: '', targetRole: '' });
-      await fetchAll();
-    } catch { showToast('Failed to post.', 'error'); }
-    finally { setAnnouncementLoading(false); }
   };
 
   const handleReviewDocument = async (e) => {
@@ -233,19 +215,16 @@ const CoordinatorDashboard = () => {
   const NAV = [
     { key: 'deployments', icon: <VectorIcon name="briefcase" size={20} />, label: 'Deployments', group: 'Operations' },
     { key: 'map', icon: <VectorIcon name="map" size={20} />, label: 'Live Map', group: 'Operations' },
-    { key: 'insights', icon: <VectorIcon name="trending" size={20} />, label: 'Insights', group: 'Monitoring' },
-    { key: 'reviews', icon: <VectorIcon name="success" size={20} />, label: 'Reviews', group: 'Monitoring', badge: anomalies.length },
+    { key: 'insights', icon: <VectorIcon name="trending" size={20} />, label: 'Insights', group: 'Monitoring', badge: anomalies.length },
     { key: 'requirements', icon: <VectorIcon name="document" size={20} />, label: 'Document Requirements', group: 'Operations' },
-    { key: 'announcements', icon: <VectorIcon name="bell" size={20} />, label: 'Announcements', group: 'Communication' },
     { key: 'users', icon: <VectorIcon name="users" size={20} />, label: 'Users', group: 'Administration' },
+    { key: 'settings', icon: <VectorIcon name="settings" size={20} />, label: 'Company Settings', group: 'Administration' },
     { key: 'health', icon: <VectorIcon name="activity" size={20} />, label: 'System Health', group: 'Administration' },
   ];
   const MOBILE_NAV = [
     { key: 'deployments', icon: <VectorIcon name="briefcase" size={20} />, label: 'Deploy' },
     { key: 'map', icon: <VectorIcon name="map" size={20} />, label: 'Map' },
-    { key: 'insights', icon: <VectorIcon name="trending" size={20} />, label: 'Insights' },
-    { key: 'reviews', icon: <VectorIcon name="success" size={20} />, label: 'Reviews', badge: anomalies.length },
-    { key: 'announcements', icon: <VectorIcon name="bell" size={20} />, label: 'Announcements' },
+  { key: 'insights', icon: <VectorIcon name="trending" size={20} />, label: 'Insights', badge: anomalies.length },
     { key: 'requirements', icon: <VectorIcon name="document" size={20} />, label: 'Requirements' },
     { key: 'users', icon: <VectorIcon name="users" size={20} />, label: 'Users' },
     { key: 'health', icon: <VectorIcon name="activity" size={20} />, label: 'Health' },
@@ -281,18 +260,9 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
       required: Number(student.required_hours || 0),
       percent: safePercent(student.hours_rendered, student.required_hours),
     }])), [students]);
-  const studentsNeedingAttention = deployedStudents.filter(student =>
-    Number(student.anomaly_count || 0) > 0
-    || Number(student.pending_documents || 0) > 0
-    || safePercent(student.hours_rendered, student.required_hours) < 30
-  ).length;
   const openInsights = view => {
-    setInsightView(view);
+    setInsightTab(view);
     setActiveTab('insights');
-  };
-  const openReviews = view => {
-    setReviewView(view);
-    setActiveTab('reviews');
   };
 
   const initials = user ? `${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}`.toUpperCase() : 'CO';
@@ -482,9 +452,9 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
         ) : activeTab === 'insights' ? (
           <>
             <PageHeader
-              title="Insights"
-              subtitle={`${students.length} students`}
-              actions={insightView === 'analytics' ? (
+              title="Insights & reviews"
+              subtitle={anomalies.length ? `${anomalies.length} flagged` : `${students.length} students`}
+              actions={insightTab === 'analytics' ? (
                 <div className="reports-menu-wrap" ref={reportsMenuRef}>
                   <button type="button" className="action-btn action-btn-gray icon-label" onClick={() => setReportsOpen(open => !open)} aria-expanded={reportsOpen} aria-haspopup="menu">
                     <VectorIcon name="document" size={16} /> Reports
@@ -505,69 +475,62 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
                 </div>
               ) : null}
             />
-            <SlidingSubnav
-              ariaLabel="Insight views"
-              activeKey={insightView}
-              onChange={setInsightView}
-              items={[
-                { key: 'analytics', label: 'Analytics', icon: <VectorIcon name="trending" size={16} /> },
-                { key: 'risks', label: 'Risks', icon: <VectorIcon name="alert" size={16} /> },
-              ]}
-            />
-            <WorkspacePane key={insightView}>
-              {insightView === 'analytics' ? (
+            <nav className="ins-subnav" aria-label="Insights and review queues">
+              {[
+                { key: 'analytics', label: 'Analytics', icon: 'trending' },
+                { key: 'risks', label: 'Risks', icon: 'alert' },
+                { key: 'attendance', label: 'Attendance', icon: 'calendar' },
+                { key: 'anomalies', label: 'Anomalies', icon: 'alert', count: anomalies.length },
+                { key: 'requests', label: 'Requests', icon: 'clock' },
+                { key: 'completion', label: 'Completion', icon: 'success' },
+              ].map(item => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`ins-subbtn${insightTab === item.key ? ' is-on' : ''}`}
+                  aria-pressed={insightTab === item.key}
+                  onClick={() => setInsightTab(item.key)}
+                >
+                  <VectorIcon name={item.icon} size={17} />
+                  <span>{item.label}</span>
+                  {item.count > 0 && <b>{item.count}</b>}
+                </button>
+              ))}
+            </nav>
+            <WorkspacePane key={insightTab}>
+              {insightTab === 'analytics' ? (
                 <AnalyticsPage
                   students={students}
                   onOpenStudents={() => { setStudentSection('all'); setActiveTab('deployments'); }}
                   onOpenProgress={() => { setStudentSection('deployed'); setActiveTab('deployments'); }}
                   onOpenRisks={() => openInsights('risks')}
                 />
-              ) : <RiskDashboard />}
-            </WorkspacePane>
-          </>
-
-        ) : activeTab === 'reviews' ? (
-          <>
-            <PageHeader
-              title="Review center"
-              subtitle={anomalies.length ? `${anomalies.length} flagged` : 'All clear'}
-            />
-            <SlidingSubnav
-              ariaLabel="Review queues"
-              activeKey={reviewView}
-              onChange={setReviewView}
-              items={[
-                { key: 'attendance', label: 'Attendance', icon: <VectorIcon name="calendar" size={16} /> },
-                { key: 'anomalies', label: 'Anomalies', icon: <VectorIcon name="alert" size={16} />, count: anomalies.length },
-                { key: 'requests', label: 'Requests', icon: <VectorIcon name="clock" size={16} /> },
-                { key: 'completion', label: 'Completion', icon: <VectorIcon name="success" size={16} /> },
-              ]}
-            />
-            <WorkspacePane key={reviewView}>
-            {reviewView === 'attendance' ? (
-              <AttendanceReviewCenter canDeleteImages embedded onToast={showToast} />
-            ) : reviewView === 'requests' ? (
-              <AttendanceExceptionsPage reviewer embedded />
-            ) : reviewView === 'completion' ? (
-              <CompletionPanel reviewer embedded />
-            ) : anomalies.length === 0 ? (
-              <div className="card"><EmptyState type="anomalies" /></div>
-            ) : (
-              <div className="card coordinator-anomaly-card">
-                <ul className="coordinator-list">
-                  {anomalies.map(a => (
-                    <li key={a.id} className="coordinator-list-row">
-                      <div>
-                        <strong>{a.first_name} {a.last_name}</strong>
-                        <span className="coordinator-muted">{formatDate(a.date)} · {formatTime(a.clock_in)}{a.company_name ? ` · ${a.company_name}` : ''}</span>
-                        <span className="coordinator-flag"><VectorIcon name="alert" size={14} /> {a.anomaly_flag}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-                <button type="button" className="action-btn action-btn-primary coordinator-anomaly-cta" onClick={() => setReviewView('attendance')}>Review in Attendance</button>
-              </div>
-            )}
+              ) : insightTab === 'risks' ? (
+                <RiskDashboard />
+              ) : insightTab === 'attendance' ? (
+                <AttendanceReviewCenter canDeleteImages embedded onToast={showToast} />
+              ) : insightTab === 'requests' ? (
+                <AttendanceExceptionsPage reviewer embedded />
+              ) : insightTab === 'completion' ? (
+                <CompletionPanel reviewer embedded />
+              ) : anomalies.length === 0 ? (
+                <div className="card"><EmptyState type="anomalies" /></div>
+              ) : (
+                <div className="card coordinator-anomaly-card">
+                  <ul className="coordinator-list">
+                    {anomalies.map(a => (
+                      <li key={a.id} className="coordinator-list-row">
+                        <div>
+                          <strong>{a.first_name} {a.last_name}</strong>
+                          <span className="coordinator-muted">{formatDate(a.date)} · {formatTime(a.clock_in)}{a.company_name ? ` · ${a.company_name}` : ''}</span>
+                          <span className="coordinator-flag"><VectorIcon name="alert" size={14} /> {a.anomaly_flag}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <button type="button" className="action-btn action-btn-primary coordinator-anomaly-cta" onClick={() => setInsightTab('attendance')}>Review in Attendance</button>
+                </div>
+              )}
             </WorkspacePane>
           </>
 
@@ -581,21 +544,41 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
               email={user?.email}
               roleLabel="School Coordinator"
               details={[
-                { label: 'Phone', value: profile?.phone || user?.phone || 'Not set' },
-                { label: 'Company', value: (profile?.companies?.length
-                  ? profile.companies.map(company => company.name).join(', ')
-                  : [...new Set(students.map(student => student.company_name).filter(Boolean))].join(', ')) || 'Not assigned' },
-                { label: 'Company address', value: profile?.company_address || 'Not set' },
                 { label: 'School', value: profile?.school || user?.school || 'Not set' },
               ]}
             />
-            <button type="button" className="card account-link-row" onClick={() => setActiveTab('settings')}>
-              <VectorIcon name="map" size={18} />
-              <span>Worksites &amp; perimeter</span>
-              <VectorIcon name="chevronRight" size={18} />
-            </button>
             <NotificationPreferences />
             <SecuritySettings />
+
+            <div className="card sup-acc-appear">
+              <span>Appearance</span>
+              <div className="profile-theme-seg" role="group" aria-label="Appearance">
+                <button
+                  type="button"
+                  className={`profile-theme-btn${theme === 'light' ? ' is-on' : ''}`}
+                  aria-pressed={theme === 'light'}
+                  onClick={() => theme !== 'light' && toggleTheme()}
+                >
+                  Light
+                </button>
+                <button
+                  type="button"
+                  className={`profile-theme-btn${theme === 'dark' ? ' is-on' : ''}`}
+                  aria-pressed={theme === 'dark'}
+                  onClick={() => theme !== 'dark' && toggleTheme()}
+                >
+                  Dark
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="profile-signout"
+              onClick={async () => { await logout(); navigate('/login', { replace: true }); }}
+            >
+              Sign out
+            </button>
           </div>
 
         ) : activeTab === 'settings' ? (
@@ -606,6 +589,7 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
 
         ) : activeTab === 'deployments' ? (
           <div className="dep">
+            <UpdatesToggle userId={user?.id} label="Notifications" includeAnnouncements={false} />
             <section className="dep-hero" aria-label="Deployments summary">
               <div className="dep-hero-glow" aria-hidden="true" />
               <div className="dep-hero-top">
@@ -727,75 +711,13 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
             ))}
           </>
 
-        ) : (
-          <>
-            <PageHeader title="Announcements" subtitle={`${announcements.length} posted`} actions={
-              <button onClick={() => setShowAnnouncement(true)} className="btn-compact-primary icon-label"><VectorIcon name="plus" size={16} /> New announcement</button>
-            } />
-            {announcements.length === 0 ? (
-              <div className="card"><EmptyState type="announcements" /></div>
-            ) : announcements.map(a => (
-              <CollapsibleSection
-                key={a.id}
-                title={a.title}
-                subtitle={`${a.first_name} ${a.last_name} · ${formatDate(a.created_at)}`}
-                count={a.target_role ? `${a.target_role}s` : 'All'}
-                defaultOpen={false}
-              >
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-2)', lineHeight: 1.55, margin: 0 }}>{a.body}</p>
-              </CollapsibleSection>
-            ))}
-          </>
-        )}
+        ) : null}
         </Suspense>
         </WorkspacePane>
       </div>
 
       {/* ── BOTTOM NAV (mobile only) ── */}
       <DashboardBottomNav items={MOBILE_NAV} activeKey={activeTab} onChange={setActiveTab} />
-
-      {/* Announcement Modal */}
-      {showAnnouncement && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-handle" />
-            <div className="modal-title">New Announcement</div>
-            <form onSubmit={handleCreateAnnouncement}>
-              <div className="form-group">
-                <label>Title</label>
-                <input type="text" required value={announcementForm.title}
-                  onChange={e => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
-                  placeholder="e.g. Midterm evaluation deadline this Friday" />
-              </div>
-              <div className="form-group">
-                <label>Message</label>
-                <textarea required rows={4} value={announcementForm.body}
-                  onChange={e => setAnnouncementForm({ ...announcementForm, body: e.target.value })}
-                  placeholder="Write the notice students or supervisors should read"
-                  style={{ width: '100%', resize: 'vertical' }}
-                />
-              </div>
-              <div className="form-group">
-                <label>Target Role (optional)</label>
-                <select value={announcementForm.targetRole}
-                  onChange={e => setAnnouncementForm({ ...announcementForm, targetRole: e.target.value })}>
-                  <option value="">Everyone in this program</option>
-                  <option value="student">Students</option>
-                  <option value="supervisor">Supervisors</option>
-                  <option value="coordinator">Coordinators</option>
-                </select>
-              </div>
-              <div className="modal-actions grid-2">
-                <button type="button" onClick={() => setShowAnnouncement(false)}
-                  className="action-btn action-btn-gray" style={{ padding: '0.875rem' }}>Cancel</button>
-                <button type="submit" disabled={announcementLoading} className="btn-primary" style={{ margin: 0 }}>
-                  {announcementLoading ? 'Posting...' : 'Post'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Export & Scheduling Modals */}
       <ReportSchedulerModal

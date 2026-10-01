@@ -1,6 +1,8 @@
 import { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { clockIn, clockOut, getTodayRecord, getDTRHistory, getDeploymentInfo, flagPerimeterExit, getAttendanceChallenge } from '../../api/dtr';
 import { scheduleReport } from '../../api/exports';
+import { getNotifications, markAsRead, markAllAsRead } from '../../api/notifications';
+import { getAnnouncements } from '../../api/coordinator';
 import useAuth from '../../hooks/useAuth';
 import useLocation from '../../hooks/useLocation';
 import { exportDTRtoPDF } from '../../utils/exportPDF';
@@ -12,6 +14,8 @@ import { safePercent } from '../../components/common/DashboardUI';
 import ReportSchedulerModal from '../../components/common/ReportSchedulerModal';
 import ExportHistoryModal from '../../components/common/ExportHistoryModal';
 import VectorIcon from '../../components/common/VectorIcon';
+import SecureImage from '../../components/common/SecureImage';
+import DocViewerModal from '../../components/common/DocViewerModal';
 import CollapsibleSection from '../../components/common/CollapsibleSection';
 import WorkspacePane from '../../components/common/WorkspacePane';
 import SkeletonPage from '../../components/common/Skeleton';
@@ -81,6 +85,62 @@ const StudentDashboard = () => {
   const [exitDistance, setExitDistance] = useState(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showExportHistory, setShowExportHistory] = useState(false);
+  const [attPhoto, setAttPhoto] = useState(null);
+  const [showUpdates, setShowUpdates] = useState(false);
+  const [updates, setUpdates] = useState([]);
+
+  const readAnnKey = user ? `smartrack:read-announcements:${user.id}` : null;
+  const getReadAnnIds = () => {
+    try { return new Set(JSON.parse(localStorage.getItem(readAnnKey) || '[]')); }
+    catch { return new Set(); }
+  };
+
+  const fetchUpdates = useCallback(async () => {
+    try {
+      const [notifRes, annRes] = await Promise.all([getNotifications(), getAnnouncements()]);
+      const readIds = getReadAnnIds();
+      const items = (notifRes.data.notifications || []).map(n => ({
+        id: n.id, title: n.title, body: n.body, date: n.created_at,
+        read: !!n.is_read, kind: 'notification',
+      }));
+      (annRes.data.announcements || []).forEach(a => {
+        if (items.some(n => n.type === 'announcement' && n.body === a.body)) return;
+        items.push({
+          id: `ann-${a.id}`, rawId: a.id, title: a.title, body: a.body, date: a.created_at,
+          read: readIds.has(String(a.id)), kind: 'announcement',
+        });
+      });
+      items.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setUpdates(items.slice(0, 5));
+    } catch { /* Updates stay hidden when unavailable. */ }
+  }, [user?.id]);
+
+  useEffect(() => { fetchUpdates(); }, [fetchUpdates]);
+
+  const openUpdate = async (item) => {
+    if (item.read || !item) return;
+    if (item.kind === 'announcement') {
+      const ids = getReadAnnIds();
+      ids.add(String(item.rawId));
+      try { localStorage.setItem(readAnnKey, JSON.stringify([...ids].slice(-200))); } catch {}
+      setUpdates(current => current.map(u => u.id === item.id ? { ...u, read: true } : u));
+    } else {
+      try { await markAsRead(item.id); } catch {}
+      setUpdates(current => current.map(u => u.id === item.id ? { ...u, read: true } : u));
+    }
+  };
+
+  const readAllUpdates = async () => {
+    try { await markAllAsRead(); } catch {}
+    if (readAnnKey) {
+      try {
+        const ids = getReadAnnIds();
+        updates.forEach(u => { if (u.kind === 'announcement') ids.add(String(u.rawId)); });
+        localStorage.setItem(readAnnKey, JSON.stringify([...ids].slice(-200)));
+      } catch {}
+    }
+    setUpdates(current => current.map(u => ({ ...u, read: true })));
+  };
   const [queueSummary, setQueueSummary] = useState({ total: 0, pending: 0, failed: 0 });
   const [syncingAttendance, setSyncingAttendance] = useState(false);
   const [latestReceipt, setLatestReceipt] = useState(null);
@@ -511,7 +571,7 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
     { key: 'documents', icon: <VectorIcon name="document" size={20} />, label: 'Docs' },
     { key: 'tasks', icon: <VectorIcon name="clipboard" size={20} />, label: 'Tasks' },
     { key: 'attendance', icon: <VectorIcon name="calendar" size={20} />, label: 'Leave' },
-    { key: 'completion', icon: <VectorIcon name="success" size={20} />, label: 'Completion' },
+    { key: 'profile', icon: <VectorIcon name="user" size={20} />, label: 'Profile' },
   ];
 
   return (
@@ -569,48 +629,56 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
               </div>
             </section>
 
+            {/* Updates — a button; the list only shows when tapped */}
+            {updates.length > 0 && (
+              <div className="home-updates">
+                <button
+                  type="button"
+                  className="home-updates-toggle"
+                  aria-expanded={showUpdates}
+                  onClick={() => setShowUpdates(value => !value)}
+                >
+                  <VectorIcon name="bell" size={15} />
+                  Updates
+                  {updates.filter(u => !u.read).length > 0 && (
+                    <b>{updates.filter(u => !u.read).length}</b>
+                  )}
+                  <VectorIcon name="chevronRight" size={15} className={showUpdates ? 'is-open' : ''} />
+                </button>
+                {showUpdates && (
+                  <>
+                    <div className="home-updates-list">
+                  {updates.map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`home-update${item.read ? ' is-read' : ''}`}
+                      onClick={() => openUpdate(item)}
+                    >
+                      <i aria-hidden="true" />
+                      <span>
+                        <strong>{item.title}</strong>
+                        {item.body && <small>{item.body}</small>}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                    {updates.some(u => !u.read) && (
+                      <button type="button" className="home-updates-readall" onClick={readAllUpdates}>
+                        Mark all read
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Today's tasks — first, so you know the work before timing in */}
             <Suspense fallback={null}>
               <StudentDailyTasks compact onToast={showToast} onOpenAll={() => setActivePage('tasks')} />
             </Suspense>
 
-            {/* Today's shift — the one place to time in / out */}
-            <section className="card shift-card" aria-label="Today's shift">
-              <div className="shift-head">
-                <div>
-                  <div className="card-title" style={{ marginBottom: '0.15rem' }}>Today's shift</div>
-                  <div className="shift-times">
-                    In {formatTime(todayRecord?.clock_in)} · Out {formatTime(todayRecord?.clock_out)}
-                    {todayRecord?.clock_out ? ` · ${formatDurationHours(todayRecord.total_hours)}` : ''}
-                  </div>
-                </div>
-                <span className={`ojt-status ojt-status-${dutyStatus.tone}`}>
-                  <span className="ojt-status-dot" aria-hidden="true" />
-                  {dutyStatus.label}
-                </span>
-              </div>
-              <div className="shift-actions">
-                <button
-                  type="button"
-                  className={`shift-btn shift-btn-in${!isClockedIn && !isClockedOut ? ' is-primary' : ''}`}
-                  onClick={() => handleInitiateAction('in')}
-                  disabled={!!isClockedIn || !!isClockedOut || actionLoading || gpsLoading || permissionBusy}
-                >
-                  <VectorIcon name="clock" size={20} />
-                  <span><strong>{gpsLoading || permissionBusy ? 'Getting GPS…' : 'Time In'}</strong><small>Live selfie</small></span>
-                </button>
-                <button
-                  type="button"
-                  className={`shift-btn shift-btn-out${isClockedIn ? ' is-primary' : ''}`}
-                  onClick={() => handleInitiateAction('out')}
-                  disabled={!isClockedIn || actionLoading || gpsLoading || permissionBusy}
-                >
-                  <VectorIcon name="check" size={20} />
-                  <span><strong>Time Out</strong><small>Live selfie</small></span>
-                </button>
-              </div>
-              {(gpsLoading || actionLoading) && <p className="shift-hint" role="status">Working… please wait.</p>}
-            </section>
+            {/* Today's shift lives below the live map now */}
 
             {queueSummary.total > 0 && (
               <div className="card" style={{ marginBottom: '0.875rem', borderColor: queueSummary.failed ? 'var(--danger)' : 'var(--warning)' }}>
@@ -707,6 +775,44 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
                 )}
               </div>
 
+            {/* Today's shift — below the live map, the one place to time in / out */}
+            <section className="card shift-card" aria-label="Today's shift">
+              <div className="shift-head">
+                <div>
+                  <div className="card-title" style={{ marginBottom: '0.15rem' }}>Today's shift</div>
+                  <div className="shift-times">
+                    In {formatTime(todayRecord?.clock_in)} · Out {formatTime(todayRecord?.clock_out)}
+                    {todayRecord?.clock_out ? ` · ${formatDurationHours(todayRecord.total_hours)}` : ''}
+                  </div>
+                </div>
+                <span className={`ojt-status ojt-status-${dutyStatus.tone}`}>
+                  <span className="ojt-status-dot" aria-hidden="true" />
+                  {dutyStatus.label}
+                </span>
+              </div>
+              <div className="shift-actions">
+                <button
+                  type="button"
+                  className={`shift-btn shift-btn-in${!isClockedIn && !isClockedOut ? ' is-primary' : ''}`}
+                  onClick={() => handleInitiateAction('in')}
+                  disabled={!!isClockedIn || !!isClockedOut || actionLoading || gpsLoading || permissionBusy}
+                >
+                  <VectorIcon name="clock" size={20} />
+                  <span><strong>{gpsLoading || permissionBusy ? 'Getting GPS…' : 'Time In'}</strong><small>Live selfie</small></span>
+                </button>
+                <button
+                  type="button"
+                  className={`shift-btn shift-btn-out${isClockedIn ? ' is-primary' : ''}`}
+                  onClick={() => handleInitiateAction('out')}
+                  disabled={!isClockedIn || actionLoading || gpsLoading || permissionBusy}
+                >
+                  <VectorIcon name="check" size={20} />
+                  <span><strong>Time Out</strong><small>Live selfie</small></span>
+                </button>
+              </div>
+              {(gpsLoading || actionLoading) && <p className="shift-hint" role="status">Working… please wait.</p>}
+            </section>
+
             {/* Anomaly */}
             {todayRecord?.anomaly_flag && (
               <div className="notice-banner is-warning" role="status">
@@ -736,31 +842,48 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
                 ) : history.length === 0 ? (
                   <EmptyState type="dtr" />
                 ) : (
-                  <div className="table-wrapper">
-                    <table>
-                      <thead>
-                        <tr>{['Date', 'In', 'Out', 'Duration', ''].map(h => <th key={h}>{h}</th>)}</tr>
-                      </thead>
-                      <tbody>
-                        {history.map(r => (
-                          <tr key={r.id}>
-                            <td style={{ fontWeight: 500 }}>{formatDate(r.date)}</td>
-                            <td style={{ color: 'var(--success)', fontWeight: 500 }}>{formatTime(r.clock_in)}</td>
-                            <td style={{ color: 'var(--danger)', fontWeight: 500 }}>{formatTime(r.clock_out)}</td>
-                            <td style={{ fontWeight: 600 }} title={r.total_hours != null ? `${r.total_hours} decimal hours` : undefined}>
-                              {r.clock_out ? formatDurationHours(r.total_hours) : '—'}
-                            </td>
-                            <td>{r.anomaly_flag
-                              ? <span className="badge badge-warning"><VectorIcon name="alert" size={13} /></span>
-                              : <span className="badge badge-success"><VectorIcon name="check" size={13} /></span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="stu-att-list">
+                    {history.map(r => (
+                      <article className="stu-att" key={r.id}>
+                        <div className="stu-att-top">
+                          <strong>{formatDate(r.date)}</strong>
+                          {r.anomaly_flag
+                            ? <span className="badge badge-warning"><VectorIcon name="alert" size={13} /></span>
+                            : <span className="badge badge-success"><VectorIcon name="check" size={13} /></span>}
+                        </div>
+                        {(r.selfie_in_url || r.selfie_out_url) ? (
+                          <div className="att-photos">
+                            {r.selfie_in_url && (
+                              <button type="button" className="att-thumb" onClick={() => setAttPhoto({ url: r.selfie_in_url, name: `Time in · ${formatDate(r.date)}` })} aria-label={`View time-in photo for ${formatDate(r.date)}`}>
+                                <SecureImage src={r.selfie_in_url} alt="" />
+                                <span>Time in</span>
+                              </button>
+                            )}
+                            {r.selfie_out_url && (
+                              <button type="button" className="att-thumb" onClick={() => setAttPhoto({ url: r.selfie_out_url, name: `Time out · ${formatDate(r.date)}` })} aria-label={`View time-out photo for ${formatDate(r.date)}`}>
+                                <SecureImage src={r.selfie_out_url} alt="" />
+                                <span>Time out</span>
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="att-nophoto">No photos for this day.</p>
+                        )}
+                        <div className="stu-att-facts">
+                          <div><span>In</span><strong>{formatTime(r.clock_in)}</strong></div>
+                          <div><span>Out</span><strong>{formatTime(r.clock_out)}</strong></div>
+                          <div><span>Hours</span><strong>{r.clock_out ? formatDurationHours(r.total_hours) : '—'}</strong></div>
+                        </div>
+                      </article>
+                    ))}
                   </div>
                 )}
               </CollapsibleSection>
+
+              {/* Completion — at the bottom, below attendance history */}
+              <Suspense fallback={null}>
+                <CompletionPanel embedded />
+              </Suspense>
           </>
         )}
         </WorkspacePane>
@@ -977,6 +1100,10 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
         isOpen={showExportHistory}
         onClose={() => setShowExportHistory(false)}
       />
+
+      {attPhoto && (
+        <DocViewerModal file={attPhoto} onClose={() => setAttPhoto(null)} />
+      )}
 
       {/* Toast */}
       {toast && (

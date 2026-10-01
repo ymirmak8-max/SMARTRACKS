@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff, LogOut, Moon, Sun } from 'lucide-react';
 import { getProfile, updateProfile, changePassword } from '../../api/profile';
 import { getStudentMeta, saveStudentMeta } from '../../utils/studentMeta';
+import { useTheme } from '../../context/ThemeContext';
+import useAuth from '../../hooks/useAuth';
 import NotificationPreferences from '../../components/common/NotificationPreferences';
 import SkeletonPage from '../../components/common/Skeleton';
 import { MAX_PHONE_DIGITS, sanitizePhone } from '../../utils/phone';
@@ -23,6 +26,9 @@ const COURSES = [
 ];
 
 const ProfilePage = () => {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
@@ -318,6 +324,42 @@ const ProfilePage = () => {
       <section id="notifications-section" className="profile-notifications" aria-label="Notification alerts">
         <NotificationPreferences />
       </section>
+
+      <div id="appearance-section" className="card profile-card edit-card">
+        <div className="edit-card-head">
+          <span className="edit-card-icon" aria-hidden="true">{theme === 'light' ? <Sun size={17} /> : <Moon size={17} />}</span>
+          <div>
+            <div className="edit-card-title">Appearance</div>
+            <div className="edit-card-sub">Light or dark mode.</div>
+          </div>
+        </div>
+        <div className="profile-theme-seg" role="group" aria-label="Appearance">
+          <button
+            type="button"
+            className={`profile-theme-btn${theme === 'light' ? ' is-on' : ''}`}
+            aria-pressed={theme === 'light'}
+            onClick={() => theme !== 'light' && toggleTheme()}
+          >
+            <Sun size={15} /> Light
+          </button>
+          <button
+            type="button"
+            className={`profile-theme-btn${theme === 'dark' ? ' is-on' : ''}`}
+            aria-pressed={theme === 'dark'}
+            onClick={() => theme !== 'dark' && toggleTheme()}
+          >
+            <Moon size={15} /> Dark
+          </button>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="profile-signout"
+        onClick={async () => { await logout(); navigate('/login', { replace: true }); }}
+      >
+        <LogOut size={16} /> Sign out
+      </button>
 
       {toast && (
         <div className={`toast ${toastType === 'error' ? 'toast-error' : ''}`}>{toast}</div>
