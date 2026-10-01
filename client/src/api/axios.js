@@ -24,6 +24,23 @@ api.interceptors.request.use((config) => {
 
 let refreshPromise = null;
 
+// Cross-tab lock so two open tabs never rotate the refresh cookie
+// at the same instant (the loser would get a 403 and log itself out).
+const REFRESH_LOCK_KEY = 'smartrack:refresh-lock';
+const acquireRefreshLock = () => {
+  try {
+    const raw = localStorage.getItem(REFRESH_LOCK_KEY);
+    if (raw && Date.now() - JSON.parse(raw).t < 20000) return false;
+    localStorage.setItem(REFRESH_LOCK_KEY, JSON.stringify({ t: Date.now() }));
+    return true;
+  } catch {
+    return true;
+  }
+};
+const releaseRefreshLock = () => {
+  try { localStorage.removeItem(REFRESH_LOCK_KEY); } catch { /* ignore */ }
+};
+
 export const tokenExpiryMs = (token = sessionStorage.getItem('accessToken')) => {
   if (!token) return 0;
   try {
@@ -35,8 +52,14 @@ export const tokenExpiryMs = (token = sessionStorage.getItem('accessToken')) => 
 };
 
 export const refreshSession = async () => {
+  if (!acquireRefreshLock()) {
+    // Another tab is rotating right now — wait for its fresh cookie,
+    // then refresh normally instead of racing it.
+    await new Promise(resolve => setTimeout(resolve, 1500));
+  }
   refreshPromise ||= api.post('/auth/refresh').finally(() => {
     refreshPromise = null;
+    releaseRefreshLock();
   });
   const response = await refreshPromise;
   const token = response.data.accessToken;

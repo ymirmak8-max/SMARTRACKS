@@ -117,7 +117,7 @@ const SupervisorLiveMap = ({ onOpenActivity, onToast = () => {} }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [workplaceError, setWorkplaceError] = useState('');
-  const [mapStyle, setMapStyle] = useState('street');
+  const [mapStyle, setMapStyle] = useState('satellite');
   const [filter, setFilter] = useState('all');
   const [radiusDrafts, setRadiusDrafts] = useState({});
   const [savingId, setSavingId] = useState('');
@@ -187,7 +187,7 @@ const SupervisorLiveMap = ({ onOpenActivity, onToast = () => {} }) => {
       leafletRef.current = L;
 
       baseLayersRef.current = createMapLayers(L, { coarsePointer });
-      showMapLayer(map, baseLayersRef.current, 'street');
+      showMapLayer(map, baseLayersRef.current, 'satellite');
 
       map.on('click', (event) => {
         if (!pickModeRef.current) return;

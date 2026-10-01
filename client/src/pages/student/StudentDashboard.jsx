@@ -86,6 +86,8 @@ const StudentDashboard = () => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showExportHistory, setShowExportHistory] = useState(false);
   const [attPhoto, setAttPhoto] = useState(null);
+  const [showAttHistory, setShowAttHistory] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
   const [showUpdates, setShowUpdates] = useState(false);
   const [updates, setUpdates] = useState([]);
 
@@ -621,8 +623,22 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
                   <VectorIcon name="chevronRight" size={15} className={showUpdates ? 'is-open' : ''} />
                 </button>
                 {showUpdates && (
-                  <>
-                    <div className="home-updates-list">
+                  <div className="modal-overlay" onClick={() => setShowUpdates(false)}>
+                    <div
+                      className="modal-content notif-modal"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="Updates"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="modal-handle" />
+                      <div className="notif-modal-head">
+                        <strong>Updates</strong>
+                        <button type="button" onClick={() => setShowUpdates(false)} aria-label="Close updates">
+                          <VectorIcon name="x" size={15} />
+                        </button>
+                      </div>
+                      <div className="home-updates-list">
                       {updates.map(item => (
                         <button
                           key={item.id}
@@ -643,7 +659,8 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
                         Mark all read
                       </button>
                     )}
-                  </>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -671,12 +688,11 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
                 <span><VectorIcon name="trending" size={13} /> {remainingHours}h remaining</span>
                 <span><VectorIcon name="clock" size={13} /> In: {formatTime(todayRecord?.clock_in)} · Out: {formatTime(todayRecord?.clock_out)}</span>
               </div>
+              {/* Today's tasks live inside the top box */}
+              <Suspense fallback={null}>
+                <StudentDailyTasks compact onToast={showToast} onOpenAll={() => setActivePage('tasks')} />
+              </Suspense>
             </section>
-
-            {/* Today's tasks — first, so you know the work before timing in */}
-            <Suspense fallback={null}>
-              <StudentDailyTasks compact onToast={showToast} onOpenAll={() => setActivePage('tasks')} />
-            </Suspense>
 
             {/* Today's shift lives below the live map now */}
 
@@ -825,12 +841,37 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
               <div className="notice-banner is-danger" role="alert">{gpsError || locationError}</div>
             )}
 
-            <CollapsibleSection
-                title="Attendance history"
-                subtitle={`${history.length} live record${history.length === 1 ? '' : 's'}`}
-                count={history.length}
-                defaultOpen
-              >
+            <button
+              type="button"
+              className="stu-att-open"
+              onClick={() => setShowAttHistory(true)}
+              aria-haspopup="dialog"
+            >
+              <VectorIcon name="calendar" size={17} />
+              <span>
+                <strong>Attendance history</strong>
+                <small>{history.length} live record{history.length === 1 ? '' : 's'} · tap to view</small>
+              </span>
+              <VectorIcon name="chevronRight" size={17} />
+            </button>
+
+            {showAttHistory && (
+              <div className="modal-overlay" onClick={() => setShowAttHistory(false)}>
+                <div
+                  className="modal-content notif-modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Attendance history"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="modal-handle" />
+                  <div className="notif-modal-head">
+                    <strong>Attendance history</strong>
+                    <button type="button" onClick={() => setShowAttHistory(false)} aria-label="Close attendance history">
+                      <VectorIcon name="x" size={15} />
+                    </button>
+                  </div>
+                  <div className="stu-att-modal-list">
                 {history.length > 0 && (
                   <button onClick={() => exportDTRtoPDF(
                     { ...user, company_name: deployment?.company_name || '—' },
@@ -878,12 +919,48 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
                     ))}
                   </div>
                 )}
-              </CollapsibleSection>
+                  </div>
+                </div>
+              </div>
+            )}
 
-              {/* Completion — at the bottom, below attendance history */}
-              <Suspense fallback={null}>
-                <CompletionPanel embedded />
-              </Suspense>
+              {/* Completion — a popup, below attendance history */}
+              <button
+                type="button"
+                className="stu-att-open"
+                onClick={() => setShowCompletion(true)}
+                aria-haspopup="dialog"
+              >
+                <VectorIcon name="success" size={17} />
+                <span>
+                  <strong>Completion</strong>
+                  <small>Requirements, remarks & review request · tap to view</small>
+                </span>
+                <VectorIcon name="chevronRight" size={17} />
+              </button>
+
+              {showCompletion && (
+                <div className="modal-overlay" onClick={() => setShowCompletion(false)}>
+                  <div
+                    className="modal-content"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Completion"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="modal-handle" />
+                    <div className="notif-modal-head">
+                      <strong>Completion</strong>
+                      <button type="button" onClick={() => setShowCompletion(false)} aria-label="Close completion">
+                        <VectorIcon name="x" size={15} />
+                      </button>
+                    </div>
+                    <Suspense fallback={null}>
+                      <CompletionPanel embedded />
+                    </Suspense>
+                  </div>
+                </div>
+              )}
           </>
         )}
         </WorkspacePane>

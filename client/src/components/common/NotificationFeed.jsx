@@ -134,14 +134,29 @@ export const UpdatesToggle = ({ userId, label = 'Notifications', includeAnnounce
         <VectorIcon name="chevronRight" size={15} className={open ? 'is-open' : ''} />
       </button>
       {open && (
-        <>
-          <FeedList items={items} loading={loading} onOpen={markOne} />
-          {unread > 0 && (
-            <button type="button" className="home-updates-readall" onClick={markAll}>
-              Mark all read
-            </button>
-          )}
-        </>
+        <div className="modal-overlay" onClick={() => setOpen(false)}>
+          <div
+            className="modal-content notif-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={label}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-handle" />
+            <div className="notif-modal-head">
+              <strong>{label}</strong>
+              <button type="button" onClick={() => setOpen(false)} aria-label={`Close ${label.toLowerCase()}`}>
+                <VectorIcon name="x" size={15} />
+              </button>
+            </div>
+            <FeedList items={items} loading={loading} onOpen={markOne} />
+            {unread > 0 && (
+              <button type="button" className="home-updates-readall" onClick={markAll}>
+                Mark all read
+              </button>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

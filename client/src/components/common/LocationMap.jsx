@@ -28,7 +28,7 @@ const LocationMap = ({ studentLat, studentLng, accuracy, officeLat, officeLng, r
   const baseLayersRef = useRef(null);
   const fittedRef = useRef(false);
   const [ready, setReady] = useState(false);
-  const [mapStyle, setMapStyle] = useState('street');
+  const [mapStyle, setMapStyle] = useState('satellite');
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -53,7 +53,7 @@ const LocationMap = ({ studentLat, studentLng, accuracy, officeLat, officeLng, r
       leafletRef.current = L;
 
       baseLayersRef.current = createMapLayers(L, { coarsePointer });
-      showMapLayer(map, baseLayersRef.current, 'street');
+      showMapLayer(map, baseLayersRef.current, 'satellite');
 
       let previousWidth = 0;
       let previousHeight = 0;

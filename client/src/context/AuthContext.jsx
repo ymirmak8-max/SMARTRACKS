@@ -50,20 +50,29 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
       return;
     }
-    try {
-      await refreshSession();
-      if (revision !== authRevision.current) return;
-      const meRes = await api.get('/auth/me');
-      if (revision !== authRevision.current) return;
-      setUser(hydrateUser(meRes.data.user));
-    } catch {
-      if (revision !== authRevision.current) return;
-      setUser(null);
-      sessionStorage.removeItem('accessToken');
-      clearPrivacySession();
-      clearSessionExpected();
-    } finally {
-      if (revision === authRevision.current) setLoading(false);
+    // One retry: a failed first attempt is usually a cold server or a
+    // network blip, not a dead session — don't log out for that.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await refreshSession();
+        if (revision !== authRevision.current) return;
+        const meRes = await api.get('/auth/me');
+        if (revision !== authRevision.current) return;
+        setUser(hydrateUser(meRes.data.user));
+        if (revision === authRevision.current) setLoading(false);
+        return;
+      } catch {
+        if (attempt === 0) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          continue;
+        }
+        if (revision !== authRevision.current) return;
+        setUser(null);
+        sessionStorage.removeItem('accessToken');
+        clearPrivacySession();
+        clearSessionExpected();
+        if (revision === authRevision.current) setLoading(false);
+      }
     }
   }, []);
 

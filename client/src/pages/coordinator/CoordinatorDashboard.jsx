@@ -27,7 +27,6 @@ import useTransientToast from '../../hooks/useTransientToast';
 import CollapsibleSection from '../../components/common/CollapsibleSection';
 import WorkspacePane from '../../components/common/WorkspacePane';
 import SkeletonPage from '../../components/common/Skeleton';
-import NotificationPreferences from '../../components/common/NotificationPreferences';
 import SecuritySettings from '../../components/common/SecuritySettings';
 
 const AnalyticsPage = lazy(() => import('./AnalyticsPage'));
@@ -43,7 +42,7 @@ const UserManagementPanel = lazy(() => import('../../components/common/UserManag
 const SystemHealthPanel = lazy(() => import('../../components/common/SystemHealthPanel'));
 
 const COORDINATOR_VIEWS = ['deployments', 'map', 'insights', 'analytics', 'risks', 'attendance', 'requests', 'completion',
-  'account', 'settings', 'requirements', 'anomalies', 'users', 'health'];
+  'account', 'settings', 'requirements', 'anomalies', 'users'];
 
 const CoordinatorDashboard = () => {
   const { user, logout } = useAuth();
@@ -219,7 +218,6 @@ const [insightTab, setInsightTab] = useState('analytics');
     { key: 'requirements', icon: <VectorIcon name="document" size={20} />, label: 'Document Requirements', group: 'Operations' },
     { key: 'users', icon: <VectorIcon name="users" size={20} />, label: 'Users', group: 'Administration' },
     { key: 'settings', icon: <VectorIcon name="settings" size={20} />, label: 'Company Settings', group: 'Administration' },
-    { key: 'health', icon: <VectorIcon name="activity" size={20} />, label: 'System Health', group: 'Administration' },
   ];
   const MOBILE_NAV = [
     { key: 'deployments', icon: <VectorIcon name="briefcase" size={20} />, label: 'Deploy' },
@@ -227,7 +225,6 @@ const [insightTab, setInsightTab] = useState('analytics');
   { key: 'insights', icon: <VectorIcon name="trending" size={20} />, label: 'Insights', badge: anomalies.length },
     { key: 'requirements', icon: <VectorIcon name="document" size={20} />, label: 'Requirements' },
     { key: 'users', icon: <VectorIcon name="users" size={20} />, label: 'Users' },
-    { key: 'health', icon: <VectorIcon name="activity" size={20} />, label: 'Health' },
     { key: 'settings', icon: <VectorIcon name="settings" size={20} />, label: 'Company Settings' },
     { key: 'account', icon: <VectorIcon name="user" size={20} />, label: 'Account' },
   ];
@@ -442,8 +439,6 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
         <Suspense fallback={<SkeletonPage variant="dashboard" />}>
         {activeTab === 'users' ? (
           <UserManagementPanel onToast={showToast} />
-        ) : activeTab === 'health' ? (
-          <SystemHealthPanel />
         ) : activeTab === 'map' ? (
           <ErrorBoundary tabName="map" key={activeTab}>
             <MapPage />
@@ -547,7 +542,6 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
                 { label: 'School', value: profile?.school || user?.school || 'Not set' },
               ]}
             />
-            <NotificationPreferences />
             <SecuritySettings />
 
             <div className="card sup-acc-appear">

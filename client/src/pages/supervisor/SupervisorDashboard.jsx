@@ -16,7 +16,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { getStudentActivity } from '../../api/supervisor';
 import { getNotifications, markAsRead, markAllAsRead } from '../../api/notifications';
 import { getAnnouncements } from '../../api/coordinator';
-import NotificationPreferences from '../../components/common/NotificationPreferences';
 import WorkspacePane from '../../components/common/WorkspacePane';
 import SkeletonPage from '../../components/common/Skeleton';
 import { getProfile } from '../../api/profile';
@@ -302,7 +301,6 @@ const SupervisorDashboard = () => {
                 </div>
               ))}
             </div>
-            <NotificationPreferences />
 
             <div className="card sup-acc-appear">
               <span>Appearance</span>
@@ -351,8 +349,22 @@ const SupervisorDashboard = () => {
                   <VectorIcon name="chevronRight" size={15} className={showUpdates ? 'is-open' : ''} />
                 </button>
                 {showUpdates && (
-                  <>
-                    <div className="home-updates-list">
+                  <div className="modal-overlay" onClick={() => setShowUpdates(false)}>
+                    <div
+                      className="modal-content notif-modal"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="Notifications"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="modal-handle" />
+                      <div className="notif-modal-head">
+                        <strong>Notifications</strong>
+                        <button type="button" onClick={() => setShowUpdates(false)} aria-label="Close notifications">
+                          <VectorIcon name="x" size={15} />
+                        </button>
+                      </div>
+                      <div className="home-updates-list">
                       {updates.map(item => (
                         <button
                           key={item.id}
@@ -373,7 +385,8 @@ const SupervisorDashboard = () => {
                         Mark all read
                       </button>
                     )}
-                  </>
+                    </div>
+                  </div>
                 )}
               </div>
             )}

@@ -5,7 +5,7 @@ import { getProfile, updateProfile, changePassword } from '../../api/profile';
 import { getStudentMeta, saveStudentMeta } from '../../utils/studentMeta';
 import { useTheme } from '../../context/ThemeContext';
 import useAuth from '../../hooks/useAuth';
-import NotificationPreferences from '../../components/common/NotificationPreferences';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import SkeletonPage from '../../components/common/Skeleton';
 import { MAX_PHONE_DIGITS, sanitizePhone } from '../../utils/phone';
 import ProfileAvatar from '../../components/common/ProfileAvatar';
@@ -43,6 +43,7 @@ const ProfilePage = () => {
   const [visiblePasswords, setVisiblePasswords] = useState({ current: false, next: false, confirm: false });
   const togglePasswordVisible = (key) => setVisiblePasswords(current => ({ ...current, [key]: !current[key] }));
   const [passwordLoading, setPasswordLoading] = useState(false);
+const [confirmLogout, setConfirmLogout] = useState(false);
   const [toast, setToast] = useState('');
   const [toastType, setToastType] = useState('success');
   const [error, setError] = useState('');
@@ -321,10 +322,6 @@ const ProfilePage = () => {
         )}
       </div>
 
-      <section id="notifications-section" className="profile-notifications" aria-label="Notification alerts">
-        <NotificationPreferences />
-      </section>
-
       <div id="appearance-section" className="card profile-card edit-card">
         <div className="edit-card-head">
           <span className="edit-card-icon" aria-hidden="true">{theme === 'light' ? <Sun size={17} /> : <Moon size={17} />}</span>
@@ -356,10 +353,19 @@ const ProfilePage = () => {
       <button
         type="button"
         className="profile-signout"
-        onClick={async () => { await logout(); navigate('/login', { replace: true }); }}
+        onClick={() => setConfirmLogout(true)}
       >
         <LogOut size={16} /> Sign out
       </button>
+
+      <ConfirmDialog
+        open={confirmLogout}
+        title="Sign out?"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign out"
+        onCancel={() => setConfirmLogout(false)}
+        onConfirm={async () => { setConfirmLogout(false); await logout(); navigate('/login', { replace: true }); }}
+      />
 
       {toast && (
         <div className={`toast ${toastType === 'error' ? 'toast-error' : ''}`}>{toast}</div>

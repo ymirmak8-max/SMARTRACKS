@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { User, LogOut, Sun, Moon, ChevronDown, Mail } from 'lucide-react';
 import VectorIcon from './VectorIcon';
+import ConfirmDialog from './ConfirmDialog';
 import { useTheme } from '../../context/ThemeContext';
 import useAuth from '../../hooks/useAuth';
 import { UserAvatar } from './ProfileAvatar';
@@ -15,6 +16,7 @@ const UserMenu = ({ onEditProfile, placement = 'chrome', compact = false }) => {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const [coords, setCoords] = useState(null);
   const [studentMeta, setStudentMeta] = useState(() => getStudentMeta(user?.id));
   const ref = useRef(null);
@@ -118,6 +120,7 @@ const UserMenu = ({ onEditProfile, placement = 'chrome', compact = false }) => {
   }, [compact]);
 
   const handleLogout = async () => {
+    setConfirmLogout(false);
     await logout();
     navigate('/login', { replace: true });
   };
@@ -173,7 +176,7 @@ const UserMenu = ({ onEditProfile, placement = 'chrome', compact = false }) => {
 
         <div className="user-menu-divider" />
 
-        <button type="button" className="user-menu-item user-menu-signout" onClick={handleLogout}>
+        <button type="button" className="user-menu-item user-menu-signout" onClick={() => { setOpen(false); setConfirmLogout(true); }}>
           <LogOut size={16} />
           Sign Out
         </button>
@@ -216,6 +219,14 @@ const UserMenu = ({ onEditProfile, placement = 'chrome', compact = false }) => {
         {placement === 'sidebar' && <ChevronDown className="user-menu-chevron" size={14} aria-hidden="true" />}
       </button>
       {panel}
+      <ConfirmDialog
+        open={confirmLogout}
+        title="Sign out?"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign out"
+        onCancel={() => setConfirmLogout(false)}
+        onConfirm={handleLogout}
+      />
     </div>
   );
 };

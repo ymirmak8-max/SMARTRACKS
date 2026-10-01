@@ -582,6 +582,14 @@ tr:last-child td { border-bottom: none; }
   .modal-content { border-radius: 20px; max-width: 520px; padding: 1.5rem; }
   .modal-handle { display: none; }
 }
+/* Confirm dialogs always pop up centered (never a bottom sheet) */
+.modal-overlay.confirm-dialog-overlay { align-items: center; padding: 1rem; }
+.modal-overlay.confirm-dialog-overlay .modal-content { border-radius: 20px; }
+.modal-overlay.confirm-dialog-overlay .modal-handle { display: none; }
+/* Tasks strip sits inside the top hero box */
+.ojt-hero .ojt-task-strip { width: 100%; margin: 0.85rem 0 0; }
+/* Profile cards: no side accent stripes */
+.profile-page .edit-card::before { display: none; }
 
 /* TOAST */
 .toast {
@@ -7299,7 +7307,20 @@ button.profile-avatar-preview:focus-visible {
 .complete-item.is-ok .complete-item-fill { background: var(--success); }
 .complete-item-state { flex: 0 0 auto; color: var(--text-3); }
 .complete-item-state.is-ok { color: var(--success); }
-.complete-remarks { margin-bottom: 0.7rem; }
+/* Completion: minimized + clean */
+.complete-hero { padding: 0.85rem 0.95rem 0.8rem; }
+.complete-eyebrow { font-size: 0.6rem; margin-bottom: 0.25rem; }
+.complete-title { font-size: clamp(1.1rem, 4vw, 1.3rem); }
+.complete-sub { font-size: 0.74rem; }
+.complete-percent strong { font-size: 1.3rem; }
+.complete-track { height: 8px; margin-top: 0.6rem; }
+.complete-list { gap: 0.4rem; margin-bottom: 0.55rem; }
+.complete-item { padding: 0.55rem 0.65rem; gap: 0.55rem; }
+.complete-item-icon { width: 30px; height: 30px; border-radius: 10px; }
+.complete-item-head strong { font-size: 0.78rem; }
+.complete-item-copy { gap: 0.25rem; }
+.complete-remarks { margin-bottom: 0.55rem; }
+.complete-remarks p { font-size: 0.76rem; }
 .complete-remarks p { margin: 0; color: var(--text-2); font-size: 0.82rem; line-height: 1.55; overflow-wrap: anywhere; }
 .complete-request { margin-bottom: 0.5rem; }
 .range-pill { display: inline-flex; padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.72rem; font-weight: 750; flex-shrink: 0; }
@@ -8688,7 +8709,21 @@ button.profile-avatar-preview:focus-visible {
   background: color-mix(in srgb, var(--surface-2) 40%, var(--surface));
   font-size: 0.78rem;
 }
-/* Student attendance history: clean cards with visible photos */
+/* Student attendance history: opener button + scrollable popup list */
+.stu-att-open {
+  display: flex; align-items: center; gap: 0.65rem; width: 100%;
+  padding: 0.75rem 0.85rem; margin-bottom: 0.875rem;
+  border: 1px solid var(--border); border-radius: 15px;
+  background: var(--surface); box-shadow: var(--shadow-sm);
+  cursor: pointer; color: var(--primary); text-align: left; font: inherit;
+  transition: border-color 0.15s ease;
+}
+.stu-att-open:hover { border-color: var(--primary); }
+.stu-att-open > span { flex: 1; min-width: 0; display: grid; }
+.stu-att-open strong { font-size: 0.86rem; color: var(--text); }
+.stu-att-open small { color: var(--text-3); font-size: 0.72rem; }
+.stu-att-open > .vector-icon:last-child { color: var(--text-3); flex: 0 0 auto; }
+.stu-att-modal-list { overflow-y: auto; min-height: 0; display: grid; gap: 0.6rem; overscroll-behavior: contain; }
 .stu-att-list { display: grid; gap: 0.55rem; }
 .stu-att {
   padding: 0.7rem; border: 1px solid var(--border); border-radius: 14px;
@@ -8726,6 +8761,32 @@ button.profile-avatar-preview:focus-visible {
   justify-self: end; border: 0; background: none; cursor: pointer;
   color: var(--primary); font-size: 0.74rem; font-weight: 750; padding: 0.25rem;
 }
+/* Notification popups: modal in front, scrollable list */
+.modal-content.notif-modal {
+  max-width: min(480px, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  max-height: calc(100dvh - 4rem);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.notif-modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+.notif-modal-head strong { font-size: 0.9rem; }
+.notif-modal-head button {
+  border: 0; background: var(--surface-2); color: var(--text-2);
+  width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+}
+.notif-modal .home-updates-list,
+.notif-modal .feed-list {
+  overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding-right: 0.1rem;
+}
+.notif-modal .home-updates-readall { align-self: flex-end; margin-top: 0.5rem; }
+.feed-list { max-height: 50vh; max-height: 50dvh; overflow-y: auto; overscroll-behavior: contain; }
 .home-updates-list { display: grid; gap: 0.45rem; }
 .home-update {
   display: flex; gap: 0.6rem; align-items: flex-start; text-align: left;

@@ -78,7 +78,7 @@ const MapPage = () => {
   const mapInstanceRef = useRef(null);
   const leafletRef = useRef(null);
   const baseLayersRef = useRef(null);
-  const mapStyleRef = useRef('street');
+  const mapStyleRef = useRef('satellite');
   const markersRef = useRef({});
   const circlesRef = useRef({});
   const editingPerimeterRef = useRef(false);
@@ -99,7 +99,7 @@ const MapPage = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [mapVersion, setMapVersion] = useState(0);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
-  const [mapStyle, setMapStyle] = useState('street');
+  const [mapStyle, setMapStyle] = useState('satellite');
   const [activeTab, setActiveTab] = useState('map');
   const [filter, setFilter] = useState('all');
   const [studentQuery, setStudentQuery] = useState('');

@@ -175,10 +175,12 @@ export const refreshAccessToken = async (req, res) => {
     if (!user)
       return res.status(403).json({ message: 'User not found.' });
 
-    await deleteRefreshToken(token);
+    // Save the replacement first: if anything fails below, the current
+    // token still works and the user is not stranded logged out.
     const refreshToken = generateRefreshToken();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await saveRefreshToken(user.id, refreshToken, expiresAt);
+    await deleteRefreshToken(token);
 
     const accessToken = generateAccessToken(user);
     res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
