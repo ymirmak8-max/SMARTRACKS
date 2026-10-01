@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate, Link, Navigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import useAuth from '../../hooks/useAuth';
+import api from '../../api/axios';
 import { ROLE_ROUTES } from '../../App';
 import BrandLogo from '../../components/common/BrandLogo';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -34,9 +35,29 @@ const Login = () => {
       }
       navigate(ROLE_ROUTES[result.role] || '/login', { replace: true });
     } catch (requestError) {
-      setError(requestError.response?.data?.message || (requestError.request
-        ? 'Cannot reach the Smartrack server. Reopen the current system link and check your internet connection.'
-        : 'Login failed. Please try again.'));
+      if (requestError.response?.data?.message) {
+        setError(requestError.response.data.message);
+      } else if (requestError.request) {
+        // No answer at all — ping the API host itself so the message
+        // names the real fault instead of guessing.
+        let healthOk = false;
+        try {
+          await api.get('/health', { timeout: 8000 });
+          healthOk = true;
+        } catch { /* health unreachable — reported below */ }
+        const apiHost = new URL(
+          api.defaults.baseURL || '/api',
+          window.location.origin
+        ).origin;
+        setError(healthOk
+          ? 'The server answered but sign-in got no reply. Please try again.'
+          : `Cannot reach the Smartrack server at ${apiHost}. ` +
+            (/localhost|127\.0\.0\.1/.test(apiHost)
+              ? 'Start the backend too: open a second terminal, run "cd server" then "npm run dev", and keep it open.'
+              : 'The deployment may be down or still building — check your hosting dashboard, then reload this page.'));
+      } else {
+        setError('Login failed. Please try again.');
+      }
       setLoading(false);
     }
   };
