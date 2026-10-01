@@ -604,6 +604,50 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
           <Suspense fallback={<SkeletonPage variant="profile" />}><ProfilePage /></Suspense>
         ) : (
           <>
+            {/* Updates first — notifications & announcements at the very top */}
+            {updates.length > 0 && (
+              <div className="home-updates">
+                <button
+                  type="button"
+                  className="home-updates-toggle"
+                  aria-expanded={showUpdates}
+                  onClick={() => setShowUpdates(value => !value)}
+                >
+                  <VectorIcon name="bell" size={15} />
+                  Updates
+                  {updates.filter(u => !u.read).length > 0 && (
+                    <b>{updates.filter(u => !u.read).length}</b>
+                  )}
+                  <VectorIcon name="chevronRight" size={15} className={showUpdates ? 'is-open' : ''} />
+                </button>
+                {showUpdates && (
+                  <>
+                    <div className="home-updates-list">
+                      {updates.map(item => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={`home-update${item.read ? ' is-read' : ''}`}
+                          onClick={() => openUpdate(item)}
+                        >
+                          <i aria-hidden="true" />
+                          <span>
+                            <strong>{item.title}</strong>
+                            {item.body && <small>{item.body}</small>}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {updates.some(u => !u.read) && (
+                      <button type="button" className="home-updates-readall" onClick={readAllUpdates}>
+                        Mark all read
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             <section className="ojt-hero" aria-label="OJT home summary">
               <div className="ojt-hero-bg" aria-hidden="true" />
               <div className="ojt-hero-top">
@@ -628,50 +672,6 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
                 <span><VectorIcon name="clock" size={13} /> In: {formatTime(todayRecord?.clock_in)} · Out: {formatTime(todayRecord?.clock_out)}</span>
               </div>
             </section>
-
-            {/* Updates — a button; the list only shows when tapped */}
-            {updates.length > 0 && (
-              <div className="home-updates">
-                <button
-                  type="button"
-                  className="home-updates-toggle"
-                  aria-expanded={showUpdates}
-                  onClick={() => setShowUpdates(value => !value)}
-                >
-                  <VectorIcon name="bell" size={15} />
-                  Updates
-                  {updates.filter(u => !u.read).length > 0 && (
-                    <b>{updates.filter(u => !u.read).length}</b>
-                  )}
-                  <VectorIcon name="chevronRight" size={15} className={showUpdates ? 'is-open' : ''} />
-                </button>
-                {showUpdates && (
-                  <>
-                    <div className="home-updates-list">
-                  {updates.map(item => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`home-update${item.read ? ' is-read' : ''}`}
-                      onClick={() => openUpdate(item)}
-                    >
-                      <i aria-hidden="true" />
-                      <span>
-                        <strong>{item.title}</strong>
-                        {item.body && <small>{item.body}</small>}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                    {updates.some(u => !u.read) && (
-                      <button type="button" className="home-updates-readall" onClick={readAllUpdates}>
-                        Mark all read
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
 
             {/* Today's tasks — first, so you know the work before timing in */}
             <Suspense fallback={null}>
