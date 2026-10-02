@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getUsers, createUser, updateUser, toggleUserStatus, deleteUser, resetUserPassword, bulkUsers, getAuditLogs } from '../../api/users';
+import { getUsers, createUser, updateUser, toggleUserStatus, deleteUser, resetUserPassword, bulkUsers } from '../../api/users';
 import useAuth from '../../hooks/useAuth';
 import EmptyState from './EmptyState';
 import ConfirmDialog from './ConfirmDialog';
 import VectorIcon from './VectorIcon';
-import StudentImportButton from './StudentImportButton';
 import SlidingSubnav from './SlidingSubnav';
 import SkeletonPage from './Skeleton';
 import { MAX_PHONE_DIGITS, sanitizePhone } from '../../utils/phone';
@@ -39,12 +38,6 @@ const UserManagementPanel = ({ onToast }) => {
   const [toastType, setToastType] = useState('success');
   const [selectedIds, setSelectedIds] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
-  const [auditOpen, setAuditOpen] = useState(false);
-  const [auditLogs, setAuditLogs] = useState([]);
-  const [auditSearch, setAuditSearch] = useState('');
-  const [auditLoading, setAuditLoading] = useState(false);
-  const [auditError, setAuditError] = useState('');
-  const [auditTotal, setAuditTotal] = useState(0);
   const [companies, setCompanies] = useState([]);
   const [confirmation, setConfirmation] = useState(null);
   const [passwordReset, setPasswordReset] = useState(null);
@@ -58,25 +51,6 @@ const UserManagementPanel = ({ onToast }) => {
       setTimeout(() => setToast(''), 6000);
     }
   }, [onToast]);
-
-  const loadAuditLogs = useCallback(async ({ searchValue = auditSearch, offset = 0, append = false } = {}) => {
-    setAuditLoading(true);
-    setAuditError('');
-    try {
-      const res = await getAuditLogs({ search: searchValue.trim() || undefined, limit: 30, offset });
-      setAuditLogs(current => append ? [...current, ...res.data.logs] : res.data.logs);
-      setAuditTotal(res.data.total || 0);
-    } catch (error) {
-      setAuditError(error.response?.data?.message || 'Failed to load audit history.');
-    } finally {
-      setAuditLoading(false);
-    }
-  }, [auditSearch]);
-
-  const openAudit = () => {
-    setAuditOpen(true);
-    loadAuditLogs({ searchValue: '', offset: 0 });
-  };
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -227,12 +201,6 @@ const UserManagementPanel = ({ onToast }) => {
               <VectorIcon name="plus" size={16} /> Add user
             </button>
           </div>
-          <div className="usr-hero-actions">
-            <button type="button" onClick={openAudit} className="usr-ghost">
-              <VectorIcon name="clock" size={14} /> Audit
-            </button>
-            <StudentImportButton onImported={(message) => { showToast(message); fetchUsers(); }} />
-          </div>
         </section>
 
         <div className="usr-tools" role="search" aria-label="Search and filter users">
@@ -366,52 +334,6 @@ const UserManagementPanel = ({ onToast }) => {
                 </article>
               );
             })}
-
-            {/* Audit modal */}
-            {auditOpen && (
-              <div className="modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setAuditOpen(false); }}>
-                <div className="modal-content audit-modal" role="dialog" aria-modal="true" aria-labelledby="audit-title">
-                  <div className="modal-handle" />
-                  <div className="audit-modal-header">
-                    <div>
-                      <h2 className="modal-title" id="audit-title">Audit history</h2>
-                      <p>{auditTotal} recorded event{auditTotal === 1 ? '' : 's'}</p>
-                    </div>
-                    <button type="button" onClick={() => setAuditOpen(false)} className="action-btn action-btn-gray">Close</button>
-                  </div>
-                  <form className="audit-search" onSubmit={event => { event.preventDefault(); loadAuditLogs({ offset: 0 }); }}>
-                    <input type="search" placeholder="Search by action, person, record, IP, or details" value={auditSearch} onChange={(e) => setAuditSearch(e.target.value)} aria-label="Search audit history" />
-                    <button type="submit" className="action-btn action-btn-primary" disabled={auditLoading}>Search</button>
-                    {auditSearch && <button type="button" className="action-btn action-btn-gray" onClick={() => { setAuditSearch(''); loadAuditLogs({ searchValue: '', offset: 0 }); }}>Clear</button>}
-                  </form>
-                  {auditError && <div className="error-message" role="alert">{auditError}</div>}
-                  <div className="audit-log-list" aria-live="polite" aria-busy={auditLoading}>
-                    {auditLoading && auditLogs.length === 0 ? <SkeletonPage variant="list" label="Loading audit history" /> : auditLogs.length === 0 ? <EmptyState title="No audit events found" sub="Try another search or clear the filter." /> : (
-                      auditLogs.map(l => (
-                        <article key={l.id} className="audit-log-item">
-                          <div className="audit-log-heading">
-                            <strong>{l.action.replace(/[._]/g, ' ').replace(/\b\w/g, character => character.toUpperCase())}</strong>
-                            <span className="badge badge-gray">{l.entity_type.replace(/_/g, ' ')}</span>
-                          </div>
-                          <div className="audit-log-actor">
-                            {l.actor_first_name ? `${l.actor_first_name} ${l.actor_last_name}` : 'System or deleted user'}
-                            {l.actor_email && <span>{l.actor_email}</span>}
-                          </div>
-                          {Object.keys(l.details || {}).length > 0 && <dl className="audit-details">
-                            {Object.entries(l.details).map(([key, value]) => <div key={key}><dt>{key.replace(/([A-Z])/g, ' $1')}</dt><dd>{typeof value === 'object' ? JSON.stringify(value) : String(value ?? '—')}</dd></div>)}
-                          </dl>}
-                          <div className="audit-log-meta">
-                            <time dateTime={l.created_at}>{new Date(l.created_at).toLocaleString()}</time>
-                            {l.ip_address && <span>IP {l.ip_address}</span>}
-                          </div>
-                        </article>
-                      ))
-                    )}
-                  </div>
-                  {auditLogs.length < auditTotal && <button type="button" className="action-btn action-btn-gray audit-load-more" disabled={auditLoading} onClick={() => loadAuditLogs({ offset: auditLogs.length, append: true })}>{auditLoading ? 'Loading…' : 'Load more'}</button>}
-                </div>
-              </div>
-            )}
           </div>
 
       {/* User Modal */}

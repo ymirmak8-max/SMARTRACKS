@@ -572,7 +572,7 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
     { key: 'dashboard', icon: <VectorIcon name="home" size={20} />, label: 'Home' },
     { key: 'documents', icon: <VectorIcon name="document" size={20} />, label: 'Docs' },
     { key: 'tasks', icon: <VectorIcon name="clipboard" size={20} />, label: 'Tasks' },
-    { key: 'attendance', icon: <VectorIcon name="calendar" size={20} />, label: 'Leave' },
+    { key: 'attendance', icon: <VectorIcon name="calendar" size={20} />, label: 'Absent' },
     { key: 'profile', icon: <VectorIcon name="user" size={20} />, label: 'Profile' },
   ];
 
@@ -606,69 +606,24 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
           <Suspense fallback={<SkeletonPage variant="profile" />}><ProfilePage /></Suspense>
         ) : (
           <>
-            {/* Updates first — notifications & announcements at the very top */}
-            {updates.length > 0 && (
-              <div className="home-updates">
-                <button
-                  type="button"
-                  className="home-updates-toggle"
-                  aria-expanded={showUpdates}
-                  onClick={() => setShowUpdates(value => !value)}
-                >
-                  <VectorIcon name="bell" size={15} />
-                  Updates
-                  {updates.filter(u => !u.read).length > 0 && (
-                    <b>{updates.filter(u => !u.read).length}</b>
-                  )}
-                  <VectorIcon name="chevronRight" size={15} className={showUpdates ? 'is-open' : ''} />
-                </button>
-                {showUpdates && (
-                  <div className="modal-overlay" onClick={() => setShowUpdates(false)}>
-                    <div
-                      className="modal-content notif-modal"
-                      role="dialog"
-                      aria-modal="true"
-                      aria-label="Updates"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="modal-handle" />
-                      <div className="notif-modal-head">
-                        <strong>Updates</strong>
-                        <button type="button" onClick={() => setShowUpdates(false)} aria-label="Close updates">
-                          <VectorIcon name="x" size={15} />
-                        </button>
-                      </div>
-                      <div className="home-updates-list">
-                      {updates.map(item => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`home-update${item.read ? ' is-read' : ''}`}
-                          onClick={() => openUpdate(item)}
-                        >
-                          <i aria-hidden="true" />
-                          <span>
-                            <strong>{item.title}</strong>
-                            {item.body && <small>{item.body}</small>}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                    {updates.some(u => !u.read) && (
-                      <button type="button" className="home-updates-readall" onClick={readAllUpdates}>
-                        Mark all read
-                      </button>
-                    )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             <section className="ojt-hero" aria-label="OJT home summary">
               <div className="ojt-hero-bg" aria-hidden="true" />
               <div className="ojt-hero-top">
                 <span className="ojt-hero-date"><VectorIcon name="calendar" size={13} /> {todayLabel}{deployment?.company_name ? ` · ${deployment.company_name}` : ''}</span>
+                {updates.length > 0 && (
+                  <button
+                    type="button"
+                    className="home-updates-bell ojt-hero-bell"
+                    aria-expanded={showUpdates}
+                    aria-label={`Updates, ${updates.filter(u => !u.read).length} unread`}
+                    onClick={() => setShowUpdates(value => !value)}
+                  >
+                    <VectorIcon name="bell" size={15} />
+                    {updates.filter(u => !u.read).length > 0 && (
+                      <b>{updates.filter(u => !u.read).length}</b>
+                    )}
+                  </button>
+                )}
               </div>
               <div className="ojt-hero-main">
                 <div className="ojt-hero-copy">
@@ -693,6 +648,46 @@ const { coords, distance, isInside, accuracy, error: locationError, matchedLocat
                 <StudentDailyTasks compact onToast={showToast} onOpenAll={() => setActivePage('tasks')} />
               </Suspense>
             </section>
+            {showUpdates && updates.length > 0 && (
+              <div className="modal-overlay" onClick={() => setShowUpdates(false)}>
+                <div
+                  className="modal-content notif-modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Updates"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="modal-handle" />
+                  <div className="notif-modal-head">
+                    <strong>Updates</strong>
+                    <button type="button" onClick={() => setShowUpdates(false)} aria-label="Close updates">
+                      <VectorIcon name="x" size={15} />
+                    </button>
+                  </div>
+                  <div className="home-updates-list">
+                    {updates.map(item => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`home-update${item.read ? ' is-read' : ''}`}
+                        onClick={() => openUpdate(item)}
+                      >
+                        <i aria-hidden="true" />
+                        <span>
+                          <strong>{item.title}</strong>
+                          {item.body && <small>{item.body}</small>}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  {updates.some(u => !u.read) && (
+                    <button type="button" className="home-updates-readall" onClick={readAllUpdates}>
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Today's shift lives below the live map now */}
 

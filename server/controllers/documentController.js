@@ -349,3 +349,30 @@ export const archiveRequirement = async (req, res) => {
     return res.status(500).json({ message: 'Failed to archive requirement.' });
   }
 };
+
+// DELETE /api/documents/requirements/:requirementId — permanent delete.
+// Blocked when student submissions reference the requirement (archive instead).
+export const deleteRequirement = async (req, res) => {
+  try {
+    const existing = await pool.query(
+      'SELECT id, name FROM document_requirements WHERE id = $1',
+      [req.params.requirementId]
+    );
+    if (!existing.rows.length) return res.status(404).json({ message: 'Requirement not found.' });
+    const submissions = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM student_documents WHERE requirement_id = $1',
+      [req.params.requirementId]
+    );
+    if (submissions.rows[0].count > 0)
+      return res.status(409).json({
+        message: `“${existing.rows[0].name}” has ${submissions.rows[0].count} linked submission${submissions.rows[0].count === 1 ? '' : 's'}. Archive it instead of deleting.`,
+      });
+    await pool.query('DELETE FROM document_requirements WHERE id = $1', [req.params.requirementId]);
+    await writeAuditLog({ actorId: req.user.id, action: 'document_requirement.delete', entityType: 'document_requirement',
+      entityId: req.params.requirementId, details: { name: existing.rows[0].name }, req });
+    return res.status(200).json({ message: `“${existing.rows[0].name}” deleted.`, id: req.params.requirementId });
+  } catch (err) {
+    console.error('Delete requirement error:', err);
+    return res.status(500).json({ message: 'Failed to delete requirement.' });
+  }
+};

@@ -21,7 +21,7 @@ const shiftDate = (iso, days) => {
 };
 
 const statusTone = { missing: 'danger', in_progress: 'warning', completed: 'success', excused: 'gray' };
-const statusLabel = (s) => String(s || 'missing').replace('_', ' ');
+const statusLabel = (s) => s === 'missing' ? 'Absent' : String(s || 'missing').replace('_', ' ');
 const isDone = (s) => s === 'completed' || s === 'excused';
 const isOpen = (s) => s === 'missing' || s === 'in_progress';
 
@@ -279,14 +279,27 @@ const SupervisorDailyTasks = ({ onToast = () => {} }) => {
                       <div className="svt-who">
                         <strong>{a.first_name} {a.last_name}</strong>
                         <small>{a.excuse_remarks ? `Excused · ${a.excuse_remarks}` : a.student_notes ? `“${a.student_notes}”` : statusLabel(a.status)}</small>
-                        {a.proof_image_url && (
+                        {a.excuse_requested_at && a.status !== 'excused' && (
+                          <small className="svt-excuse-req">Excuse requested{a.excuse_request_remarks ? ` · ${a.excuse_request_remarks}` : ''}</small>
+                        )}
+                        {a.proof_image_url && (a.status === 'completed' || a.status === 'excused') && (
+                          <button
+                            type="button"
+                            className="svt-proof-submitted"
+                            onClick={() => setProofViewer({ url: a.proof_image_url, name: `${g.title} · ${a.first_name} ${a.last_name}` })}
+                          >
+                            <SecureImage src={a.proof_image_url} alt="" />
+                            <span>Submitted photo · tap to view</span>
+                          </button>
+                        )}
+                        {a.proof_image_url && a.status !== 'completed' && a.status !== 'excused' && (
                           <button
                             type="button"
                             className="svt-proof"
                             onClick={() => setProofViewer({ url: a.proof_image_url, name: `${g.title} · ${a.first_name} ${a.last_name}` })}
                           >
                             <SecureImage src={a.proof_image_url} alt="" />
-                            <span>Photo proof</span>
+                            <span>View photo</span>
                           </button>
                         )}
                       </div>

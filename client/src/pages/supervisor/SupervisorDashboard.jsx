@@ -349,66 +349,25 @@ const SupervisorDashboard = () => {
         ) : (
 
           <div className="sup-stu">
-            {updates.length > 0 && (
-              <div className="home-updates">
-                <button
-                  type="button"
-                  className="home-updates-toggle"
-                  aria-expanded={showUpdates}
-                  onClick={() => setShowUpdates(value => !value)}
-                >
-                  <VectorIcon name="bell" size={15} />
-                  Notifications
-                  {updates.filter(u => !u.read).length > 0 && (
-                    <b>{updates.filter(u => !u.read).length}</b>
-                  )}
-                  <VectorIcon name="chevronRight" size={15} className={showUpdates ? 'is-open' : ''} />
-                </button>
-                {showUpdates && (
-                  <div className="modal-overlay" onClick={() => setShowUpdates(false)}>
-                    <div
-                      className="modal-content notif-modal"
-                      role="dialog"
-                      aria-modal="true"
-                      aria-label="Notifications"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="modal-handle" />
-                      <div className="notif-modal-head">
-                        <strong>Notifications</strong>
-                        <button type="button" onClick={() => setShowUpdates(false)} aria-label="Close notifications">
-                          <VectorIcon name="x" size={15} />
-                        </button>
-                      </div>
-                      <div className="home-updates-list">
-                      {updates.map(item => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`home-update${item.read ? ' is-read' : ''}`}
-                          onClick={() => openUpdate(item)}
-                        >
-                          <i aria-hidden="true" />
-                          <span>
-                            <strong>{item.title}</strong>
-                            {item.body && <small>{item.body}</small>}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                    {updates.some(u => !u.read) && (
-                      <button type="button" className="home-updates-readall" onClick={readAllUpdates}>
-                        Mark all read
-                      </button>
-                    )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
             <section className="sup-stu-hero" aria-label="My students summary">
               <div className="sup-stu-glow" aria-hidden="true" />
-              <p className="sup-stu-eyebrow"><VectorIcon name="users" size={12} /> My trainees</p>
+              <div className="sup-stu-hero-top">
+                <p className="sup-stu-eyebrow"><VectorIcon name="users" size={12} /> My trainees</p>
+                {updates.length > 0 && (
+                  <button
+                    type="button"
+                    className="home-updates-bell sup-stu-bell"
+                    aria-expanded={showUpdates}
+                    aria-label={`Notifications, ${updates.filter(u => !u.read).length} unread`}
+                    onClick={() => setShowUpdates(value => !value)}
+                  >
+                    <VectorIcon name="bell" size={15} />
+                    {updates.filter(u => !u.read).length > 0 && (
+                      <b>{updates.filter(u => !u.read).length}</b>
+                    )}
+                  </button>
+                )}
+              </div>
               <h1 className="sup-stu-title">My students</h1>
               <p className="sup-stu-sub">
                 {students.length === 0
@@ -419,6 +378,46 @@ const SupervisorDashboard = () => {
                 <p className="sup-stu-co"><VectorIcon name="building" size={13} /> {supervisorCompany}</p>
               )}
             </section>
+            {showUpdates && updates.length > 0 && (
+              <div className="modal-overlay" onClick={() => setShowUpdates(false)}>
+                <div
+                  className="modal-content notif-modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Notifications"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="modal-handle" />
+                  <div className="notif-modal-head">
+                    <strong>Notifications</strong>
+                    <button type="button" onClick={() => setShowUpdates(false)} aria-label="Close notifications">
+                      <VectorIcon name="x" size={15} />
+                    </button>
+                  </div>
+                  <div className="home-updates-list">
+                    {updates.map(item => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`home-update${item.read ? ' is-read' : ''}`}
+                        onClick={() => openUpdate(item)}
+                      >
+                        <i aria-hidden="true" />
+                        <span>
+                          <strong>{item.title}</strong>
+                          {item.body && <small>{item.body}</small>}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  {updates.some(u => !u.read) && (
+                    <button type="button" className="home-updates-readall" onClick={readAllUpdates}>
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {!loading && students.length > 0 && (
               <label className="sup-stu-search">
@@ -523,13 +522,6 @@ const SupervisorDashboard = () => {
                             <VectorIcon name="chevronRight" size={15} />
                           </button>
                         </div>
-                        <button
-                          type="button"
-                          className="sup-stu-activity"
-                          onClick={() => openActivity(student.id)}
-                        >
-                          <VectorIcon name="activity" size={15} /> Activity, attendance & photos
-                        </button>
                         <div className="sup-eval-grid">
                           <div className={`sup-eval-box${hasMidterm ? ' is-done' : ''}`}>
                             <span>Midterm</span>

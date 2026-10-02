@@ -158,7 +158,6 @@ const [confirmLogout, setConfirmLogout] = useState(false);
             initials={initials}
             onToast={showToast}
             stackActions
-            photoEditable={editMode}
             pickerRef={pickerRef}
           />
         </div>

@@ -387,7 +387,7 @@ export const getStudentActivity = async (req, res) => {
       await ensureDailyTaskTables();
       const tasksResult = await pool.query(
         `SELECT a.id, a.status, a.student_notes, a.completed_at, a.excuse_remarks, a.updated_at,
-                a.proof_image_url,
+                a.proof_image_url, a.excuse_request_remarks, a.excuse_requested_at,
                 t.title, t.description, t.task_date::text AS task_date
          FROM daily_task_assignments a
          JOIN daily_task_templates t ON t.id = a.template_id

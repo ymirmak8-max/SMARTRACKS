@@ -135,7 +135,7 @@ const UserAvatar = ({ src, initials, size = 64, className = '', previewable = fa
   );
 };
 
-const ProfileAvatar = ({ initials, size = 64, onToast, stackActions = false, photoEditable = false, pickerRef = null }) => {
+const ProfileAvatar = ({ initials, size = 64, onToast, stackActions = false, pickerRef = null }) => {
   const { user, patchUser } = useAuth();
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -189,9 +189,7 @@ const ProfileAvatar = ({ initials, size = 64, onToast, stackActions = false, pho
         title="Change photo"
       >
         <UserAvatar src={picture} initials={initials} size={size} />
-        {(photoEditable || !picture) && (
-          <span className="avatar-camera-badge" aria-hidden="true"><Camera size={12} /></span>
-        )}
+        <span className="avatar-camera-badge" aria-hidden="true"><Camera size={12} /></span>
       </button>
       {busy && <span className="avatar-saving" role="status">Saving…</span>}
       <div className={`profile-avatar-actions${stackActions ? ' is-stacked' : ''}`}>

@@ -307,6 +307,8 @@ export const authorizeStoredFile = async (token, user) => {
       SELECT id AS owner_id FROM users WHERE profile_picture = $1
       UNION
       SELECT student_id AS owner_id FROM attendance_exceptions WHERE evidence_url = $1
+      UNION
+      SELECT student_id AS owner_id FROM daily_task_assignments WHERE proof_image_url = $1
     ) files
     LIMIT 1
   `, [fileUrl]);

@@ -39,6 +39,10 @@ const ensureDailyTaskTables = async () => {
     'CREATE INDEX IF NOT EXISTS daily_task_assignments_student_idx ON daily_task_assignments (student_id, status)'
   )).then(() => pool.query(
     'ALTER TABLE daily_task_assignments ADD COLUMN IF NOT EXISTS proof_image_url TEXT'
+  )).then(() => pool.query(
+    'ALTER TABLE daily_task_assignments ADD COLUMN IF NOT EXISTS excuse_request_remarks TEXT'
+  )).then(() => pool.query(
+    'ALTER TABLE daily_task_assignments ADD COLUMN IF NOT EXISTS excuse_requested_at TIMESTAMPTZ'
   )).catch((error) => {
     tablesReady = null;
     throw error;
@@ -54,6 +58,7 @@ const manilaDate = (value) => {
 const assignmentSelect = `
   SELECT a.id, a.template_id, a.deployment_id, a.student_id, a.status, a.student_notes,
          a.completed_at, a.excused_at, a.excuse_remarks, a.updated_at, a.proof_image_url,
+         a.excuse_request_remarks, a.excuse_requested_at,
          t.title, t.description, t.task_date::text AS task_date, t.supervisor_id,
          u.first_name, u.last_name, u.email
   FROM daily_task_assignments a
@@ -283,6 +288,30 @@ export const updateStudentDailyTask = async (req, res) => {
     const task = current.rows[0];
     if (task.status === 'excused')
       return res.status(409).json({ message: 'This task was excused by your supervisor.' });
+    if (req.body?.excuseRequest) {
+      const excuseRemarks = String(req.body?.excuseRemarks || req.body?.remarks || '').trim();
+      if (!excuseRemarks)
+        return res.status(400).json({ message: 'Tell your supervisor why you need to be excused.' });
+      const requested = await pool.query(
+        `UPDATE daily_task_assignments
+         SET excuse_request_remarks = $1, excuse_requested_at = NOW(), updated_at = NOW()
+         WHERE id = $2
+         RETURNING id, status, student_notes, proof_image_url,
+                   excuse_request_remarks, excuse_requested_at, completed_at, updated_at`,
+        [excuseRemarks, req.params.id]
+      );
+      await sendNotification(
+        task.supervisor_id,
+        'Excuse requested',
+        `${task.first_name} ${task.last_name} asked to be excused from “${task.title}”: ${excuseRemarks}`,
+        'general'
+      ).catch(() => {});
+      await writeAuditLog({
+        actorId: req.user.id, action: 'daily_task.excuse_request', entityType: 'daily_task_assignment',
+        entityId: req.params.id, details: { remarks: excuseRemarks }, req,
+      });
+      return res.status(200).json({ message: 'Excuse requested. Your supervisor will review it.', task: { ...task, ...requested.rows[0] } });
+    }
     if (task.status === 'completed' && status === 'in_progress')
       return res.status(409).json({ message: 'This task is already completed.' });
 
@@ -319,7 +348,8 @@ export const updateStudentDailyTask = async (req, res) => {
            completed_at = CASE WHEN $1 = 'completed' THEN NOW() ELSE completed_at END,
            updated_at = NOW()
        WHERE id = $4
-       RETURNING id, status, student_notes, proof_image_url, completed_at, updated_at`,
+       RETURNING id, status, student_notes, proof_image_url,
+                 excuse_request_remarks, excuse_requested_at, completed_at, updated_at`,
       [status, notes, proofUrl, req.params.id]
     );
 

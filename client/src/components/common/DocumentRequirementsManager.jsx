@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { archiveRequirement, createRequirement, getRequirements, updateRequirement } from '../../api/documents';
+import { archiveRequirement, createRequirement, deleteRequirement, getRequirements, updateRequirement } from '../../api/documents';
 import ConfirmDialog from './ConfirmDialog';
 import EmptyState from './EmptyState';
 import SkeletonPage from './Skeleton';
@@ -97,6 +97,28 @@ const DocumentRequirementsManager = ({ role = 'Administrator' }) => {
     },
   });
 
+  const requestDelete = () => {
+    if (!editing?.id || saving) return;
+    const target = editing;
+    setConfirmation({
+      title: `Delete “${target.name}”?`,
+      message: 'This permanently removes the requirement. Requirements with student submissions cannot be deleted — archive them instead.',
+      confirmLabel: 'Delete requirement',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmation(null); setError(''); setNotice('');
+        try {
+          const response = await deleteRequirement(target.id);
+          setNotice(response.data.message);
+          setEditing(null);
+          await load();
+        } catch (requestError) {
+          setError(requestError.response?.data?.message || 'Unable to delete this requirement.');
+        }
+      },
+    });
+  };
+
   const activeCount = requirements.length - archivedCount;
 
   return <div className="req">
@@ -192,12 +214,19 @@ const DocumentRequirementsManager = ({ role = 'Administrator' }) => {
             <div className="form-group"><label htmlFor="requirement-deadline">Due <em>optional</em></label><input id="requirement-deadline" type="number" min="0" max="365" value={form.deadlineDaysBeforeOjt} onChange={event => setForm({ ...form, deadlineDaysBeforeOjt: event.target.value === '' ? '' : Number(event.target.value) })} placeholder="Days before OJT" /></div>
             <div className="form-group"><label htmlFor="requirement-order">Order</label><input id="requirement-order" type="number" min="0" max="10000" required value={form.sortOrder} onChange={event => setForm({ ...form, sortOrder: Number(event.target.value) })} /></div>
           </div>
-          <label className="req-check"><input type="checkbox" checked={form.isRequired} onChange={event => setForm({ ...form, isRequired: event.target.checked })} /> Required for completion</label>
-          {editing.id && <label className="req-check"><input type="checkbox" checked={form.isActive} onChange={event => setForm({ ...form, isActive: event.target.checked })} /> Visible to students</label>}
+          <div className="req-checks">
+            <label className="req-check"><input type="checkbox" checked={form.isRequired} onChange={event => setForm({ ...form, isRequired: event.target.checked })} /> Required for completion</label>
+            {editing.id && <label className="req-check"><input type="checkbox" checked={form.isActive} onChange={event => setForm({ ...form, isActive: event.target.checked })} /> Visible to students</label>}
+          </div>
           <div className="modal-actions grid-2">
             <button type="button" className="action-btn action-btn-gray" disabled={saving} onClick={closeForm}>Cancel</button>
             <button type="submit" className="action-btn action-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
           </div>
+          {editing.id && (
+            <button type="button" className="req-delete" disabled={saving} onClick={requestDelete}>
+              <VectorIcon name="trash" size={14} /> Delete requirement
+            </button>
+          )}
         </form>
       </div>
     </div>}
@@ -207,6 +236,7 @@ const DocumentRequirementsManager = ({ role = 'Administrator' }) => {
       title={confirmation?.title}
       message={confirmation?.message}
       confirmLabel={confirmation?.confirmLabel}
+      danger={confirmation?.danger}
       onCancel={() => setConfirmation(null)}
       onConfirm={confirmation?.onConfirm}
     />

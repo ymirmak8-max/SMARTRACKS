@@ -162,4 +162,51 @@ export const UpdatesToggle = ({ userId, label = 'Notifications', includeAnnounce
   );
 };
 
+/** Compact bell icon for the top-right of hero cards. Expands the feed in a popup. */
+export const UpdatesBell = ({ userId, label = 'Notifications', includeAnnouncements = true, className = '' }) => {
+  const [open, setOpen] = useState(false);
+  const { items, loading, markOne, markAll } = useUpdates(userId, includeAnnouncements);
+  const unread = items.filter(item => !item.read).length;
+  if (!items.length && !loading) return null;
+  return (
+    <>
+      <button
+        type="button"
+        className={`home-updates-bell ${className}`.trim()}
+        aria-expanded={open}
+        aria-label={`${label}, ${unread} unread`}
+        onClick={() => setOpen(value => !value)}
+      >
+        <VectorIcon name="bell" size={15} />
+        {unread > 0 && <b>{unread}</b>}
+      </button>
+      {open && (
+        <div className="modal-overlay" onClick={() => setOpen(false)}>
+          <div
+            className="modal-content notif-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={label}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-handle" />
+            <div className="notif-modal-head">
+              <strong>{label}</strong>
+              <button type="button" onClick={() => setOpen(false)} aria-label={`Close ${label.toLowerCase()}`}>
+                <VectorIcon name="x" size={15} />
+              </button>
+            </div>
+            <FeedList items={items} loading={loading} onOpen={markOne} />
+            {unread > 0 && (
+              <button type="button" className="home-updates-readall" onClick={markAll}>
+                Mark all read
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 export default NotificationFeed;

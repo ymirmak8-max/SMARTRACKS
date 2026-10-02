@@ -49,6 +49,33 @@ const CHART_TABS = [
 const axisTick = { fontSize: 11, fill: 'var(--text-3)' };
 const legendStyle = { fontSize: '12px', paddingTop: '8px' };
 
+const renderAnalysisBody = (body) => {
+  const lines = String(body || '').split('\n').map(line => line.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  const blocks = [];
+  let bullets = [];
+  const flushBullets = () => {
+    if (!bullets.length) return;
+    const items = bullets;
+    bullets = [];
+    blocks.push(
+      <ul key={`list-${blocks.length}`} className="analysis-list">
+        {items.map((item, index) => <li key={index}>{item}</li>)}
+      </ul>
+    );
+  };
+  lines.forEach((line) => {
+    const bullet = line.match(/^[-•]\s+(.*)/);
+    if (bullet) bullets.push(bullet[1]);
+    else {
+      flushBullets();
+      blocks.push(<p key={`text-${blocks.length}`}>{line}</p>);
+    }
+  });
+  flushBullets();
+  return <div className="analysis-section-body">{blocks}</div>;
+};
+
 const formatAnalysis = (text) => {
   if (!text) return null;
   const normalized = String(text).replace(/\r\n/g, '\n').trim();
@@ -67,7 +94,7 @@ const formatAnalysis = (text) => {
     return (
       <div key={`${title}-${i}`} className={`analysis-section ${tone}`.trim()}>
         <div className="analysis-section-title">{title}</div>
-        {body && <div className="analysis-section-body">{body}</div>}
+        {renderAnalysisBody(body)}
       </div>
     );
   });
@@ -226,8 +253,8 @@ const AnalyticsPage = ({ students, onOpenStudents, onOpenProgress, onOpenRisks }
               <span className="analytics-report-icon"><VectorIcon name="bot" size={18} /></span>
               <strong>Cohort report</strong>
               <SourceBadge source={overviewData.analysisSource} />
-              <button type="button" className="action-btn action-btn-gray icon-label analytics-report-refresh" onClick={fetchOverview}>
-                <VectorIcon name="refresh" size={15} /> Refresh
+              <button type="button" className="action-btn action-btn-gray analytics-report-refresh" onClick={fetchOverview} aria-label="Refresh report">
+                <VectorIcon name="refresh" size={15} />
               </button>
             </div>
             <div className="analytics-quick-stats">

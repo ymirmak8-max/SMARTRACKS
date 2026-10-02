@@ -7,4 +7,5 @@ export const reviewDocument = (docId, data) => api.patch(`/documents/${docId}/re
 export const createRequirement = (data) => api.post('/documents/requirements', data);
 export const updateRequirement = (id, data) => api.put(`/documents/requirements/${id}`, data);
 export const archiveRequirement = (id) => api.patch(`/documents/requirements/${id}/archive`);
+export const deleteRequirement = (id) => api.delete(`/documents/requirements/${id}`);
 export const getStudentDocuments = (studentId) => api.get(`/documents/student/${studentId}`);

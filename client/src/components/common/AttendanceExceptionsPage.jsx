@@ -24,7 +24,7 @@ const formatDate = value => value ? new Date(`${String(value).slice(0, 10)}T00:0
 /** Student-facing label. Backend still stores 'correction' — we show 'Excuse'. */
 const typeLabel = (type) => {
   if (type === 'correction' || type === 'excuse') return 'Excuse';
-  if (type === 'leave') return 'Leave';
+  if (type === 'leave') return 'Absent';
   return type;
 };
 /** Convert the form's UI value back to the backend-accepted type. */
@@ -232,15 +232,15 @@ const AttendanceExceptionsPage = ({ reviewer = false, embedded = false }) => {
 
   return (
     <div className="leave-form">
-      <section className="leave-hero" aria-label="Leave and excuse form">
+      <section className="leave-hero" aria-label="Absent and excuse form">
         <div className="leave-hero-bg" aria-hidden="true" />
-        <p className="leave-eyebrow"><VectorIcon name="calendar" size={13} /> Attendance · Leave & excuse</p>
-        <h1 className="leave-title">Leave & excuse form</h1>
+        <p className="leave-eyebrow"><VectorIcon name="calendar" size={13} /> Attendance · Absent & excuse</p>
+        <h1 className="leave-title">Absent & excuse form</h1>
         <p className="leave-identity">
           <VectorIcon name="user" size={14} />
           <span><strong>{fullName}</strong>{metaLine ? ` · ${metaLine}` : ''}</span>
         </p>
-        <p className="leave-sub">File an approved leave or excuse a missed attendance record. Your coordinator reviews every request.</p>
+        <p className="leave-sub">File an absence or excuse a missed attendance record. Your coordinator reviews every request.</p>
         <div className="leave-stats">
           <div className="leave-stat"><strong>{pendingCount}</strong><span>Pending</span></div>
           <div className="leave-stat"><strong>{approvedCount}</strong><span>Approved</span></div>
@@ -252,7 +252,7 @@ const AttendanceExceptionsPage = ({ reviewer = false, embedded = false }) => {
         <div className="card-title">New request</div>
         <div className="leave-seg" role="group" aria-label="Request type">
           {[
-            { value: 'leave', label: 'Leave', icon: 'calendar', hint: 'Planned absence' },
+            { value: 'leave', label: 'Absent', icon: 'calendar', hint: 'Planned absence' },
             { value: 'excuse', label: 'Excuse', icon: 'document', hint: 'Missed record' },
           ].map(option => (
             <button
@@ -310,18 +310,17 @@ const AttendanceExceptionsPage = ({ reviewer = false, embedded = false }) => {
           </div>
           {error && <p className="error-message">{error}</p>}
           <button className="btn-primary" disabled={saving}>
-            <span className="icon-label"><VectorIcon name={saving ? 'clock' : 'check'} size={16} /> {saving ? 'Submitting...' : `Submit ${requestForm.type === 'leave' ? 'leave' : 'excuse'}`}</span>
+            <span className="icon-label"><VectorIcon name={saving ? 'clock' : 'check'} size={16} /> {saving ? 'Submitting...' : `Submit ${requestForm.type === 'leave' ? 'absent' : 'excuse'}`}</span>
           </button>
         </form>
       </div>
 
       <div className="card leave-history-card">
         <div className="card-title">My requests</div>
-        {loading ? <SkeletonPage variant="list" label="Loading requests" /> : items.length === 0 ? <EmptyState title="No requests yet" sub="Your leave and excuse requests will appear here." /> : (
+        {loading ? <SkeletonPage variant="list" label="Loading requests" /> : items.length === 0 ? <EmptyState title="No requests yet" sub="Your absent and excuse requests will appear here." /> : (
           <ul className="leave-history-list">
             {items.map(item => (
               <li key={item.id} className={`leave-history-item is-${item.status}`}>
-                <span className="leave-history-accent" aria-hidden="true" />
                 <div className="leave-history-head">
                   <strong>{typeLabel(item.exception_type)}</strong>
                   <span className="badge" style={STATUS_STYLE[item.status]}>{item.status}</span>

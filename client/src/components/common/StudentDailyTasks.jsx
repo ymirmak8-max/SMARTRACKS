@@ -18,7 +18,13 @@ const statusTone = {
   excused: 'gray',
 };
 
-const statusLabel = (status) => String(status || 'missing').replace('_', ' ');
+const statusLabel = (status) => {
+  if (status === 'missing') return 'Absent';
+  if (status === 'in_progress') return 'In progress';
+  if (status === 'completed') return 'Done';
+  if (status === 'excused') return 'Excused';
+  return String(status || 'missing').replace('_', ' ');
+};
 
 const formatTaskDate = (value) => {
   const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -80,6 +86,45 @@ const StudentDailyTasks = ({ onToast = () => {}, compact = false, onOpenAll }) =
   const [proofCheck, setProofCheck] = useState(null);
   const [proofChecking, setProofChecking] = useState(false);
   const [proofError, setProofError] = useState('');
+  const [excuseTask, setExcuseTask] = useState(null);
+  const [excuseRemarks, setExcuseRemarks] = useState('');
+  const [excuseError, setExcuseError] = useState('');
+
+  const openExcuseModal = (task) => {
+    setExcuseTask(task);
+    setExcuseRemarks('');
+    setExcuseError('');
+  };
+
+  const closeExcuseModal = () => {
+    if (savingId) return;
+    setExcuseTask(null);
+    setExcuseRemarks('');
+    setExcuseError('');
+  };
+
+  const submitExcuseRequest = async () => {
+    if (!excuseTask || savingId) return;
+    if (!excuseRemarks.trim()) {
+      setExcuseError('Tell your supervisor why you need to be excused.');
+      return;
+    }
+    setSavingId(excuseTask.id);
+    setExcuseError('');
+    try {
+      const response = await updateMyDailyTask(excuseTask.id, {
+        excuseRequest: true,
+        excuseRemarks: excuseRemarks.trim(),
+      });
+      setTasks((current) => current.map((item) => item.id === excuseTask.id ? { ...item, ...response.data.task } : item));
+      onToast(response.data.message);
+      closeExcuseModal();
+    } catch (error) {
+      setExcuseError(error.response?.data?.message || 'Unable to send the excuse request.');
+    } finally {
+      setSavingId('');
+    }
+  };
 
   const openProofModal = (task) => {
     setProofTask(task);
@@ -220,7 +265,7 @@ const StudentDailyTasks = ({ onToast = () => {}, compact = false, onOpenAll }) =
       <div className="tasks-filters" role="group" aria-label="Filter tasks by status">
         {[
           { value: 'all', label: 'All', count: totalCount },
-          { value: 'missing', label: 'Missing', count: counts.missing },
+          { value: 'missing', label: 'Absent', count: counts.missing },
           { value: 'in_progress', label: 'Active', count: counts.in_progress },
           { value: 'completed', label: 'Done', count: counts.completed },
           { value: 'excused', label: 'Excused', count: counts.excused },
@@ -295,23 +340,43 @@ const StudentDailyTasks = ({ onToast = () => {}, compact = false, onOpenAll }) =
               <p className="task-card-meta">Assigned {formatTaskDate(task.task_date)}</p>
             )}
             {task.excuse_remarks && <p className="task-card-note">Excused: {task.excuse_remarks}</p>}
-            {task.proof_image_url && (
+            {task.excuse_requested_at && task.status !== 'excused' && (
+              <p className="task-card-excuse">Excuse requested{task.excuse_request_remarks ? `: ${task.excuse_request_remarks}` : ''}</p>
+            )}
+            {task.student_notes && <p className="task-card-note">Submitted: {task.student_notes}</p>}
+            {task.proof_image_url && task.status === 'completed' && (
+              <button type="button" className="task-proof-submitted" onClick={() => openProofModal(task)} aria-label="View submitted photo">
+                <SecureImage src={task.proof_image_url} alt="Submitted photo" />
+                <span>Submitted photo · tap to view</span>
+              </button>
+            )}
+            {task.proof_image_url && task.status !== 'completed' && (
               <button type="button" className="task-proof-thumb" onClick={() => openProofModal(task)} aria-label="View submitted photo proof">
                 <SecureImage src={task.proof_image_url} alt="Submitted photo proof" />
                 <span>Photo proof submitted · tap to view</span>
               </button>
             )}
-            {task.status !== 'excused' && task.status !== 'completed' && (
-              <div className="task-card-actions">
-                {task.status === 'missing' && (
-                  <button type="button" className="task-btn" disabled={savingId === task.id} onClick={() => updateStatus(task, 'in_progress')}>
-                    Start
-                  </button>
-                )}
-                <button type="button" className="task-btn is-done" disabled={savingId === task.id} onClick={() => openProofModal(task)}>
-                  {savingId === task.id ? 'Saving…' : 'Mark done'}
-                </button>
-              </div>
+          </div>
+          <div className="task-card-side">
+            {task.status === 'missing' && (
+              <button type="button" className="task-btn" disabled={savingId === task.id} onClick={() => updateStatus(task, 'in_progress')}>
+                Start
+              </button>
+            )}
+            {(task.status === 'missing' || task.status === 'in_progress') && (
+              <button type="button" className="task-btn is-done" disabled={savingId === task.id} onClick={() => openProofModal(task)}>
+                {savingId === task.id ? 'Saving…' : 'Submit'}
+              </button>
+            )}
+            {task.status === 'completed' && (
+              <button type="button" className="task-btn is-done" disabled={savingId === task.id} onClick={() => openProofModal(task)}>
+                Resubmit
+              </button>
+            )}
+            {(task.status === 'missing' || task.status === 'in_progress') && !task.excuse_requested_at && (
+              <button type="button" className="task-btn is-excuse" disabled={savingId === task.id} onClick={() => openExcuseModal(task)}>
+                Excuse
+              </button>
             )}
           </div>
         </article>
@@ -387,7 +452,52 @@ const StudentDailyTasks = ({ onToast = () => {}, compact = false, onOpenAll }) =
                 disabled={!!savingId || proofChecking || !proofImage}
                 onClick={submitProof}
               >
-                {savingId ? 'Submitting…' : 'Submit task'}
+                {savingId ? 'Submitting…' : proofTask?.status === 'completed' ? 'Resubmit task' : 'Submit task'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {excuseTask && (
+        <div className="modal-overlay" onClick={closeExcuseModal}>
+          <div
+            className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Request to be excused"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-handle" />
+            <div className="notif-modal-head">
+              <strong>Absent · {excuseTask.title}</strong>
+              <button type="button" onClick={closeExcuseModal} aria-label="Close excuse form">
+                <VectorIcon name="x" size={15} />
+              </button>
+            </div>
+            <div className="form-group">
+              <label htmlFor="task-excuse-reason">Why can&apos;t you do this task?</label>
+              <textarea
+                id="task-excuse-reason"
+                rows={3}
+                value={excuseRemarks}
+                onChange={(e) => setExcuseRemarks(e.target.value)}
+                placeholder="e.g. Absent today due to fever"
+              />
+            </div>
+            {excuseError && <p className="error-message" role="alert">{excuseError}</p>}
+            <div className="modal-actions grid-2" style={{ marginTop: '0.75rem' }}>
+              <button type="button" className="action-btn action-btn-gray" onClick={closeExcuseModal} disabled={!!savingId}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ margin: 0 }}
+                disabled={!!savingId || !excuseRemarks.trim()}
+                onClick={submitExcuseRequest}
+              >
+                {savingId ? 'Sending…' : 'Send request'}
               </button>
             </div>
           </div>

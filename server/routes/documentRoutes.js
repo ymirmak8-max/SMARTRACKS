@@ -8,6 +8,7 @@ import {
   createRequirement,
   updateRequirement,
   archiveRequirement,
+  deleteRequirement,
 } from '../controllers/documentController.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import { authorize } from '../middleware/roleMiddleware.js';
@@ -27,5 +28,6 @@ router.delete('/:docId/file', authorize('coordinator'), deleteDocumentFile);
 router.post('/requirements', authorize('coordinator'), createRequirement);
 router.put('/requirements/:requirementId', authorize('coordinator'), updateRequirement);
 router.patch('/requirements/:requirementId/archive', authorize('coordinator'), archiveRequirement);
+router.delete('/requirements/:requirementId', authorize('coordinator'), deleteRequirement);
 
 export default router;

@@ -430,7 +430,7 @@ const MapPage = () => {
   );
 
   return (
-    <div className="svm">
+    <div className="svm coord-map">
       <section className="svm-hero" aria-label="Live map summary">
         <div className="svm-hero-glow" aria-hidden="true" />
         <div className="svm-hero-top">

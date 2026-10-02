@@ -121,20 +121,33 @@ const SupervisorStudentActivity = ({ students = [], studentId, onSelectStudent }
               <article className="sup-day" key={task.id}>
                 <div className="sup-day-head">
                   <strong>{task.title}</strong>
-                  <StatusBadge tone={TASK_TONES[task.status] || 'gray'}>{String(task.status).replace('_', ' ')}</StatusBadge>
+                  <StatusBadge tone={TASK_TONES[task.status] || 'gray'}>{task.status === 'missing' ? 'Absent' : String(task.status).replace('_', ' ')}</StatusBadge>
                 </div>
                 <p className="sup-day-muted">{dayLabel(task.task_date)}</p>
                 {task.description && <p className="sup-day-note">{task.description}</p>}
                 {task.student_notes && <p className="sup-day-note"><strong>Note:</strong> {task.student_notes}</p>}
                 {task.excuse_remarks && <p className="sup-day-muted">Excused: {task.excuse_remarks}</p>}
-                {task.proof_image_url && (
+                {task.excuse_requested_at && task.status !== 'excused' && (
+                  <p className="sup-day-note"><strong>Excuse requested:</strong> {task.excuse_request_remarks || '—'}</p>
+                )}
+                {task.proof_image_url && task.status === 'completed' && (
+                  <button
+                    type="button"
+                    className="svt-proof-submitted"
+                    onClick={() => setProofViewer({ url: task.proof_image_url, name: `${task.title} · submitted photo` })}
+                  >
+                    <SecureImage src={task.proof_image_url} alt="" />
+                    <span>Submitted photo · tap to view</span>
+                  </button>
+                )}
+                {task.proof_image_url && task.status !== 'completed' && (
                   <button
                     type="button"
                     className="svt-proof"
                     onClick={() => setProofViewer({ url: task.proof_image_url, name: `${task.title} · photo proof` })}
                   >
                     <SecureImage src={task.proof_image_url} alt="" />
-                    <span>Photo proof</span>
+                    <span>View photo</span>
                   </button>
                 )}
               </article>

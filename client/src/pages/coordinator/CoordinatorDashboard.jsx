@@ -9,7 +9,7 @@ import { exportAnalyticsAsCSV, scheduleReport, downloadCSV } from '../../api/exp
 import useAuth from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import EmptyState from '../../components/common/EmptyState';
-import { UpdatesToggle } from '../../components/common/NotificationFeed';
+import { UpdatesBell } from '../../components/common/NotificationFeed';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
 import SecureImage from '../../components/common/SecureImage';
 import { AccountIdentityCard, PageHeader, safePercent } from '../../components/common/DashboardUI';
@@ -578,12 +578,14 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
 
         ) : activeTab === 'deployments' ? (
           <div className="dep">
-            <UpdatesToggle userId={user?.id} label="Notifications" includeAnnouncements={false} />
             <section className="dep-hero" aria-label="Deployments summary">
               <div className="dep-hero-glow" aria-hidden="true" />
+              <div className="dep-hero-eyebrowrow">
+                <p className="dep-eyebrow"><VectorIcon name="briefcase" size={12} /> Deploy</p>
+                <UpdatesBell userId={user?.id} label="Notifications" includeAnnouncements={false} className="dep-bell" />
+              </div>
               <div className="dep-hero-top">
                 <div>
-                  <p className="dep-eyebrow"><VectorIcon name="briefcase" size={12} /> Deploy</p>
                   <h1 className="dep-title">
                     {undeployedStudents.length === 0 ? 'All deployed' : `${undeployedStudents.length} waiting`}
                   </h1>
