@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 import { writeAuditLog } from '../utils/audit.js';
+import { IMAGE_TYPES, persistUpload } from '../utils/storage.js';
 import { sendNotification } from './notificationController.js';
 
 const TASK_STATUSES = ['missing', 'in_progress', 'completed', 'excused'];
@@ -36,6 +37,8 @@ const ensureDailyTaskTables = async () => {
     'CREATE INDEX IF NOT EXISTS daily_task_templates_supervisor_date_idx ON daily_task_templates (supervisor_id, task_date DESC)'
   )).then(() => pool.query(
     'CREATE INDEX IF NOT EXISTS daily_task_assignments_student_idx ON daily_task_assignments (student_id, status)'
+  )).then(() => pool.query(
+    'ALTER TABLE daily_task_assignments ADD COLUMN IF NOT EXISTS proof_image_url TEXT'
   )).catch((error) => {
     tablesReady = null;
     throw error;
@@ -50,7 +53,7 @@ const manilaDate = (value) => {
 
 const assignmentSelect = `
   SELECT a.id, a.template_id, a.deployment_id, a.student_id, a.status, a.student_notes,
-         a.completed_at, a.excused_at, a.excuse_remarks, a.updated_at,
+         a.completed_at, a.excused_at, a.excuse_remarks, a.updated_at, a.proof_image_url,
          t.title, t.description, t.task_date::text AS task_date, t.supervisor_id,
          u.first_name, u.last_name, u.email
   FROM daily_task_assignments a
@@ -268,6 +271,7 @@ export const updateStudentDailyTask = async (req, res) => {
     await ensureDailyTaskTables();
     const status = String(req.body?.status || '').trim();
     const notes = String(req.body?.notes || '').trim();
+    const proofImage = req.body?.proofImage || req.body?.proof_image || null;
     if (!STUDENT_STATUSES.includes(status))
       return res.status(400).json({ message: 'Mark the task in progress or completed.' });
 
@@ -282,15 +286,41 @@ export const updateStudentDailyTask = async (req, res) => {
     if (task.status === 'completed' && status === 'in_progress')
       return res.status(409).json({ message: 'This task is already completed.' });
 
+    let proofUrl = task.proof_image_url || null;
+    if (status === 'completed') {
+      if (proofImage) {
+        try {
+          proofUrl = await persistUpload(proofImage, {
+            folder: 'tasks/proofs', ownerId: req.user.id,
+            allowedTypes: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024,
+          });
+        } catch (uploadError) {
+          return res.status(uploadError.status || 400).json({ message: uploadError.message || 'Photo proof is invalid.' });
+        }
+      }
+      if (!proofUrl)
+        return res.status(400).json({ message: 'Upload a photo proof with your face before submitting.' });
+    } else if (proofImage) {
+      try {
+        proofUrl = await persistUpload(proofImage, {
+          folder: 'tasks/proofs', ownerId: req.user.id,
+          allowedTypes: IMAGE_TYPES, maxBytes: 5 * 1024 * 1024,
+        });
+      } catch (uploadError) {
+        return res.status(uploadError.status || 400).json({ message: uploadError.message || 'Photo proof is invalid.' });
+      }
+    }
+
     const updated = await pool.query(
       `UPDATE daily_task_assignments
        SET status = $1,
            student_notes = COALESCE(NULLIF($2, ''), student_notes),
+           proof_image_url = COALESCE($3, proof_image_url),
            completed_at = CASE WHEN $1 = 'completed' THEN NOW() ELSE completed_at END,
            updated_at = NOW()
-       WHERE id = $3
-       RETURNING id, status, student_notes, completed_at, updated_at`,
-      [status, notes, req.params.id]
+       WHERE id = $4
+       RETURNING id, status, student_notes, proof_image_url, completed_at, updated_at`,
+      [status, notes, proofUrl, req.params.id]
     );
 
     if (status === 'completed') {

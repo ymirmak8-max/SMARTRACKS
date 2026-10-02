@@ -21,9 +21,12 @@ import SkeletonPage from '../../components/common/Skeleton';
 import { getProfile } from '../../api/profile';
 import ProfileAvatar from '../../components/common/ProfileAvatar';
 import SecureImage from '../../components/common/SecureImage';
+import DocPreview from '../../components/common/DocPreview';
 import DocViewerModal from '../../components/common/DocViewerModal';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import SupervisorDailyTasks from '../../components/common/SupervisorDailyTasks';
 import SupervisorStudentActivity from '../../components/common/SupervisorStudentActivity';
+import PasswordChangeCard from '../../components/common/PasswordChangeCard';
 
 const RUBRIC_CRITERIA = [
   { key: 'attitude', label: 'Work attitude & behavior', description: 'Punctuality, discipline, professionalism' },
@@ -75,6 +78,8 @@ const SupervisorDashboard = () => {
   const [updates, setUpdates] = useState([]);
   const [showUpdates, setShowUpdates] = useState(false);
   const [cardPhoto, setCardPhoto] = useState(null);
+  const [listModal, setListModal] = useState(null);
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast(msg); setToastType(type);
@@ -141,16 +146,24 @@ const SupervisorDashboard = () => {
     setUpdates(current => current.map(u => ({ ...u, read: true })));
   };
 
+  const ensureActivity = useCallback((student) => {
+    if (activityCache[student.id]) return;
+    setActivityLoadingId(student.id);
+    getStudentActivity(student.id)
+      .then(res => setActivityCache(current => ({ ...current, [student.id]: res.data })))
+      .catch(() => {})
+      .finally(() => setActivityLoadingId(current => (current === student.id ? null : current)));
+  }, [activityCache]);
+
   const toggleStudent = (student) => {
     const isOpen = openStudentId === student.id;
     setOpenStudentId(isOpen ? null : student.id);
-    if (!isOpen && !activityCache[student.id]) {
-      setActivityLoadingId(student.id);
-      getStudentActivity(student.id)
-        .then(res => setActivityCache(current => ({ ...current, [student.id]: res.data })))
-        .catch(() => {})
-        .finally(() => setActivityLoadingId(current => (current === student.id ? null : current)));
-    }
+    if (!isOpen) ensureActivity(student);
+  };
+
+  const openListModal = (student, type) => {
+    ensureActivity(student);
+    setListModal({ type, student });
   };
 
   const openActivity = useCallback((studentId) => {
@@ -161,6 +174,7 @@ const SupervisorDashboard = () => {
   }, [location.pathname, navigate]);
 
   const handleLogout = useCallback(async () => {
+    setConfirmLogout(false);
     await logout();
     navigate('/login', { replace: true });
   }, [logout, navigate]);
@@ -302,6 +316,8 @@ const SupervisorDashboard = () => {
               ))}
             </div>
 
+            <PasswordChangeCard onToast={showToast} />
+
             <div className="card sup-acc-appear">
               <span>Appearance</span>
               <div className="profile-theme-seg" role="group" aria-label="Appearance">
@@ -324,7 +340,7 @@ const SupervisorDashboard = () => {
               </div>
             </div>
 
-            <button type="button" className="profile-signout" onClick={handleLogout}>
+            <button type="button" className="profile-signout" onClick={() => setConfirmLogout(true)}>
               Sign out
             </button>
 
@@ -487,49 +503,26 @@ const SupervisorDashboard = () => {
                         </p>
                         {student.school && <p className="sup-stu-meta">{student.school}</p>}
                         <p className="sup-stu-meta">{student.email}</p>
-                        <p className="dep-mini-label">Recent attendance</p>
-                        {activityLoadingId === student.id ? (
-                          <p className="sup-stu-meta">Loading attendance…</p>
-                        ) : (() => {
-                          const records = (activityCache[student.id]?.records || []).slice(0, 5);
-                          if (!records.length) return <p className="sup-stu-meta">No attendance records yet.</p>;
-                          return (
-                            <div className="sup-att-list">
-                              {records.map(record => {
-                                const state = record.clock_in && !record.clock_out
-                                  ? { label: `In · ${clockTime(record.clock_in)}`, color: 'var(--success)' }
-                                  : record.anomaly_flag
-                                    ? { label: 'Flagged', color: 'var(--danger)' }
-                                    : record.clock_out
-                                      ? { label: `${clockTime(record.clock_in)} – ${clockTime(record.clock_out)}`, color: 'var(--text-3)' }
-                                      : { label: 'No record', color: 'var(--text-3)' };
-                                return (
-                                  <div className="sup-att-row" key={record.id || record.date}>
-                                    <span className="sup-att-dot" style={{ background: state.color }} aria-hidden="true" />
-                                    <span className="sup-att-copy">
-                                      <strong>{dayShort(record.date)}</strong>
-                                      <small>{state.label}</small>
-                                    </span>
-                                    {(record.selfie_in_url || record.selfie_out_url) && (
-                                      <span className="sup-att-thumbs">
-                                        {record.selfie_in_url && (
-                                          <button type="button" onClick={() => setCardPhoto({ url: record.selfie_in_url, name: `Time in · ${student.first_name} ${student.last_name} · ${dayShort(record.date)}` })} aria-label={`View time-in photo for ${dayShort(record.date)}`}>
-                                            <SecureImage src={record.selfie_in_url} alt="" />
-                                          </button>
-                                        )}
-                                        {record.selfie_out_url && (
-                                          <button type="button" onClick={() => setCardPhoto({ url: record.selfie_out_url, name: `Time out · ${student.first_name} ${student.last_name} · ${dayShort(record.date)}` })} aria-label={`View time-out photo for ${dayShort(record.date)}`}>
-                                            <SecureImage src={record.selfie_out_url} alt="" />
-                                          </button>
-                                        )}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        })()}
+                        <div className="sup-stu-quick">
+                          <button
+                            type="button"
+                            className="sup-stu-quick-btn"
+                            onClick={() => openListModal(student, 'attendance')}
+                          >
+                            <VectorIcon name="clock" size={15} />
+                            <span>Attendance</span>
+                            <VectorIcon name="chevronRight" size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="sup-stu-quick-btn"
+                            onClick={() => openListModal(student, 'documents')}
+                          >
+                            <VectorIcon name="document" size={15} />
+                            <span>Documents</span>
+                            <VectorIcon name="chevronRight" size={15} />
+                          </button>
+                        </div>
                         <button
                           type="button"
                           className="sup-stu-activity"
@@ -584,10 +577,123 @@ const SupervisorDashboard = () => {
       {/* Bottom Nav */}
       <DashboardBottomNav items={NAV} activeKey={activeTab} onChange={setActiveTab} />
 
-      {/* Evaluation Modal */}
+      {/* Attendance / Documents list popup */}
+      {listModal && (() => {
+        const cached = activityCache[listModal.student.id] || {};
+        const isAttendance = listModal.type === 'attendance';
+        const records = cached.records || [];
+        const docs = cached.documents || [];
+        const loadingList = activityLoadingId === listModal.student.id;
+        const tone = (status) => status === 'approved' ? 'success' : status === 'pending' ? 'warning' : 'gray';
+        return (
+          <div className="modal-overlay" onClick={() => setListModal(null)}>
+            <div
+              className="modal-content sup-list-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label={isAttendance ? 'Attendance' : 'Documents'}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="modal-handle" />
+              <div className="notif-modal-head">
+                <strong>
+                  {isAttendance ? 'Attendance' : 'Documents'}
+                  {' · '}{listModal.student.first_name} {listModal.student.last_name}
+                </strong>
+                <button type="button" onClick={() => setListModal(null)} aria-label="Close list">
+                  <VectorIcon name="x" size={15} />
+                </button>
+              </div>
+              <div className="sup-list-modal-body">
+                {loadingList ? (
+                  <p className="sup-stu-meta">Loading…</p>
+                ) : isAttendance ? (
+                  records.length === 0 ? (
+                    <p className="sup-stu-meta">No attendance records yet.</p>
+                  ) : (
+                    <div className="sup-att-list">
+                      {records.map(record => {
+                        const state = record.clock_in && !record.clock_out
+                          ? { label: `In · ${clockTime(record.clock_in)}`, color: 'var(--success)' }
+                          : record.anomaly_flag
+                            ? { label: 'Flagged', color: 'var(--danger)' }
+                            : record.clock_out
+                              ? { label: `${clockTime(record.clock_in)} – ${clockTime(record.clock_out)}`, color: 'var(--text-3)' }
+                              : { label: 'No record', color: 'var(--text-3)' };
+                        return (
+                          <div className="sup-att-row" key={record.id || record.date}>
+                            <span className="sup-att-dot" style={{ background: state.color }} aria-hidden="true" />
+                            <span className="sup-att-copy">
+                              <strong>{dayShort(record.date)}</strong>
+                              <small>{state.label}</small>
+                            </span>
+                            {(record.selfie_in_url || record.selfie_out_url) && (
+                              <span className="sup-att-thumbs">
+                                {record.selfie_in_url && (
+                                  <button type="button" onClick={() => setCardPhoto({ url: record.selfie_in_url, name: `Time in · ${listModal.student.first_name} ${listModal.student.last_name} · ${dayShort(record.date)}` })} aria-label={`View time-in photo for ${dayShort(record.date)}`}>
+                                    <SecureImage src={record.selfie_in_url} alt="" />
+                                  </button>
+                                )}
+                                {record.selfie_out_url && (
+                                  <button type="button" onClick={() => setCardPhoto({ url: record.selfie_out_url, name: `Time out · ${listModal.student.first_name} ${listModal.student.last_name} · ${dayShort(record.date)}` })} aria-label={`View time-out photo for ${dayShort(record.date)}`}>
+                                    <SecureImage src={record.selfie_out_url} alt="" />
+                                  </button>
+                                )}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : docs.length === 0 ? (
+                  <p className="sup-stu-meta">No documents yet.</p>
+                ) : (
+                  <div className="dep-docs">
+                    {docs.map(doc => (
+                      <div className="dep-doc" key={doc.id}>
+                        {doc.file_url && (
+                          <DocPreview
+                            url={doc.file_url}
+                            name={doc.requirement_name}
+                            onOpen={() => setCardPhoto({ url: doc.file_url, name: `${doc.requirement_name} · ${listModal.student.first_name} ${listModal.student.last_name}` })}
+                          />
+                        )}
+                        <span className="dep-doc-name">{doc.requirement_name}</span>
+                        <span className="dep-doc-side">
+                          <span className={`badge badge-${tone(doc.status)}`}>{doc.status || 'missing'}</span>
+                          {doc.file_url && (
+                            <button
+                              type="button"
+                              className="dep-link"
+                              onClick={() => setCardPhoto({ url: doc.file_url, name: `${doc.requirement_name} · ${listModal.student.first_name} ${listModal.student.last_name}` })}
+                            >
+                              View
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Photo viewer on top of list popup */}
       {cardPhoto && (
         <DocViewerModal file={cardPhoto} onClose={() => setCardPhoto(null)} />
       )}
+      <ConfirmDialog
+        open={confirmLogout}
+        title="Sign out?"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign out"
+        onCancel={() => setConfirmLogout(false)}
+        onConfirm={handleLogout}
+      />
       {showEvalModal && selectedStudent && (
         <div className="modal-overlay">
           <div className="modal-content">

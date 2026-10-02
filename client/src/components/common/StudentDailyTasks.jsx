@@ -4,6 +4,8 @@ import EmptyState from './EmptyState';
 import VectorIcon from './VectorIcon';
 import { StatusBadge } from './DashboardUI';
 import SkeletonPage from './Skeleton';
+import SecureImage from './SecureImage';
+import { validateSelfie } from '../../utils/selfieCheck';
 
 const todayInManila = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -73,6 +75,90 @@ const StudentDailyTasks = ({ onToast = () => {}, compact = false, onOpenAll }) =
   };
 
   const [filter, setFilter] = useState('all');
+  const [proofTask, setProofTask] = useState(null);
+  const [proofImage, setProofImage] = useState(null);
+  const [proofCheck, setProofCheck] = useState(null);
+  const [proofChecking, setProofChecking] = useState(false);
+  const [proofError, setProofError] = useState('');
+
+  const openProofModal = (task) => {
+    setProofTask(task);
+    setProofImage(task.proof_image_url || null);
+    setProofCheck(null);
+    setProofError('');
+  };
+
+  const closeProofModal = () => {
+    if (savingId) return;
+    setProofTask(null);
+    setProofImage(null);
+    setProofCheck(null);
+    setProofError('');
+  };
+
+  const handleProofFile = (file) => {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      setProofError('Photo proof must be a JPG or PNG image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setProofError('Photo proof must be smaller than 5 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result;
+      setProofImage(dataUrl);
+      setProofError('');
+      setProofCheck(null);
+      setProofChecking(true);
+      try {
+        const result = await validateSelfie(dataUrl);
+        setProofCheck(result);
+        if (!result.ok) setProofError(result.reason || 'Face check failed. Retake with your face visible.');
+      } catch {
+        setProofError('Could not run the face check. Try another photo.');
+      } finally {
+        setProofChecking(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const submitProof = async () => {
+    if (!proofTask || savingId || proofChecking) return;
+    if (!proofImage) {
+      setProofError('Upload a photo proof with your face before submitting.');
+      return;
+    }
+    if (proofCheck && !proofCheck.ok) {
+      setProofError(proofCheck.reason || 'Face check failed. Retake with your face visible.');
+      return;
+    }
+    setSavingId(proofTask.id);
+    setProofError('');
+    try {
+      const isDataUrl = String(proofImage).startsWith('data:');
+      const response = await updateMyDailyTask(proofTask.id, {
+        status: 'completed',
+        ...(isDataUrl ? { proofImage } : {}),
+      });
+      setTasks((current) => current.map((item) => item.id === proofTask.id ? { ...item, ...response.data.task } : item));
+      setCounts((current) => {
+        const next = { ...current };
+        next[proofTask.status] = Math.max(0, (next[proofTask.status] || 0) - 1);
+        next.completed = (next.completed || 0) + 1;
+        return next;
+      });
+      onToast(response.data.message);
+      closeProofModal();
+    } catch (error) {
+      setProofError(error.response?.data?.message || 'Unable to submit this task.');
+    } finally {
+      setSavingId('');
+    }
+  };
 
   if (compact) {
     const openCount = counts.missing + counts.in_progress;
@@ -209,6 +295,12 @@ const StudentDailyTasks = ({ onToast = () => {}, compact = false, onOpenAll }) =
               <p className="task-card-meta">Assigned {formatTaskDate(task.task_date)}</p>
             )}
             {task.excuse_remarks && <p className="task-card-note">Excused: {task.excuse_remarks}</p>}
+            {task.proof_image_url && (
+              <button type="button" className="task-proof-thumb" onClick={() => openProofModal(task)} aria-label="View submitted photo proof">
+                <SecureImage src={task.proof_image_url} alt="Submitted photo proof" />
+                <span>Photo proof submitted · tap to view</span>
+              </button>
+            )}
             {task.status !== 'excused' && task.status !== 'completed' && (
               <div className="task-card-actions">
                 {task.status === 'missing' && (
@@ -216,7 +308,7 @@ const StudentDailyTasks = ({ onToast = () => {}, compact = false, onOpenAll }) =
                     Start
                   </button>
                 )}
-                <button type="button" className="task-btn is-done" disabled={savingId === task.id} onClick={() => updateStatus(task, 'completed')}>
+                <button type="button" className="task-btn is-done" disabled={savingId === task.id} onClick={() => openProofModal(task)}>
                   {savingId === task.id ? 'Saving…' : 'Mark done'}
                 </button>
               </div>
@@ -224,6 +316,83 @@ const StudentDailyTasks = ({ onToast = () => {}, compact = false, onOpenAll }) =
           </div>
         </article>
       ))}
+
+      {proofTask && (
+        <div className="modal-overlay" onClick={closeProofModal}>
+          <div
+            className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Submit task with photo proof"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-handle" />
+            <div className="notif-modal-head">
+              <strong>Photo proof · {proofTask.title}</strong>
+              <button type="button" onClick={closeProofModal} aria-label="Close proof">
+                <VectorIcon name="x" size={15} />
+              </button>
+            </div>
+            <p className="task-proof-sub">
+              Upload a clear photo with your face visible. Face detection runs on your device before submit.
+            </p>
+            {proofImage ? (
+              <div className="task-proof-preview">
+                {String(proofImage).startsWith('data:') ? (
+                  <img src={proofImage} alt="Photo proof preview" />
+                ) : (
+                  <SecureImage src={proofImage} alt="Submitted photo proof" />
+                )}
+                <label className="task-proof-replace">
+                  Replace photo
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    style={{ display: 'none' }}
+                    onChange={(e) => handleProofFile(e.target.files?.[0])}
+                  />
+                </label>
+              </div>
+            ) : (
+              <label className="task-proof-drop">
+                <VectorIcon name="camera" size={28} />
+                <span>Tap to upload a photo (JPG/PNG, max 5 MB)</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleProofFile(e.target.files?.[0])}
+                />
+              </label>
+            )}
+            {proofChecking && <p className="task-proof-checking" role="status">Checking face… blur and face detection…</p>}
+            {proofCheck?.ok && (
+              <p className="task-proof-pass" role="status">
+                <VectorIcon name="check" size={14} />
+                <span>
+                  Face detected{typeof proofCheck.faceCount === 'number' ? ` · ${proofCheck.faceCount} face${proofCheck.faceCount === 1 ? '' : 's'}` : ''}
+                  {typeof proofCheck.blurScore === 'number' ? ` · sharpness ${proofCheck.blurScore}` : ''}
+                </span>
+              </p>
+            )}
+            {proofError && <p className="error-message" role="alert">{proofError}</p>}
+            <div className="modal-actions grid-2" style={{ marginTop: '0.75rem' }}>
+              <button type="button" className="action-btn action-btn-gray" onClick={closeProofModal} disabled={!!savingId}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ margin: 0 }}
+                disabled={!!savingId || proofChecking || !proofImage}
+                onClick={submitProof}
+              >
+                {savingId ? 'Submitting…' : 'Submit task'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

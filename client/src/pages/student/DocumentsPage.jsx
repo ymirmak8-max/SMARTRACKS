@@ -3,6 +3,7 @@ import { getMyDocuments, uploadDocument } from '../../api/documents';
 import EmptyState from '../../components/common/EmptyState';
 import SkeletonPage from '../../components/common/Skeleton';
 import VectorIcon from '../../components/common/VectorIcon';
+import DocViewerModal from '../../components/common/DocViewerModal';
 
 const STATUS_STYLES = {
   not_submitted: { bg: 'var(--surface-2)', color: 'var(--text-2)', label: 'Not Submitted' },
@@ -20,6 +21,7 @@ const DocumentsPage = ({ onBack: _onBack }) => {
   const fileInputRef = useRef(null);
   const [activeReq, setActiveReq] = useState(null);
   const [loadError, setLoadError] = useState('');
+  const [viewer, setViewer] = useState(null);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast(msg); setToastType(type);
@@ -131,7 +133,14 @@ const DocumentsPage = ({ onBack: _onBack }) => {
                 </span>
                 <span className="docs-row-actions">
                   {document?.file_url && (
-                    <a href={document.file_url} target="_blank" rel="noreferrer" className="docs-icon-btn" aria-label={`View ${requirement.name}`}><VectorIcon name="eye" size={15} /></a>
+                    <button
+                      type="button"
+                      onClick={() => setViewer({ url: document.file_url, name: requirement.name })}
+                      className="docs-icon-btn"
+                      aria-label={`View ${requirement.name}`}
+                    >
+                      <VectorIcon name="eye" size={15} />
+                    </button>
                   )}
                   {status !== 'approved' && (
                     <button
@@ -149,6 +158,10 @@ const DocumentsPage = ({ onBack: _onBack }) => {
             );
           })}
         </ul>
+      )}
+
+      {viewer && (
+        <DocViewerModal file={viewer} onClose={() => setViewer(null)} />
       )}
 
       {toast && (

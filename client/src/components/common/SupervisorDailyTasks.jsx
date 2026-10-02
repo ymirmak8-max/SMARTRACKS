@@ -3,6 +3,8 @@ import { getMyStudents } from '../../api/evaluations';
 import { createDailyTask, deleteDailyTask, excuseDailyTask, getSupervisorDailyTasks } from '../../api/dailyTasks';
 import EmptyState from './EmptyState';
 import { StatusBadge } from './DashboardUI';
+import DocViewerModal from './DocViewerModal';
+import SecureImage from './SecureImage';
 import SkeletonPage from './Skeleton';
 import VectorIcon from './VectorIcon';
 
@@ -52,6 +54,7 @@ const SupervisorDailyTasks = ({ onToast = () => {} }) => {
   const [excuseTarget, setExcuseTarget] = useState(null);
   const [excuseRemarks, setExcuseRemarks] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [proofViewer, setProofViewer] = useState(null);
   const userPickedDate = useRef(false);
   const dateInputRef = useRef(null);
 
@@ -276,6 +279,16 @@ const SupervisorDailyTasks = ({ onToast = () => {} }) => {
                       <div className="svt-who">
                         <strong>{a.first_name} {a.last_name}</strong>
                         <small>{a.excuse_remarks ? `Excused · ${a.excuse_remarks}` : a.student_notes ? `“${a.student_notes}”` : statusLabel(a.status)}</small>
+                        {a.proof_image_url && (
+                          <button
+                            type="button"
+                            className="svt-proof"
+                            onClick={() => setProofViewer({ url: a.proof_image_url, name: `${g.title} · ${a.first_name} ${a.last_name}` })}
+                          >
+                            <SecureImage src={a.proof_image_url} alt="" />
+                            <span>Photo proof</span>
+                          </button>
+                        )}
                       </div>
                       <StatusBadge tone={statusTone[a.status] || 'gray'}>{statusLabel(a.status)}</StatusBadge>
                       {isOpen(a.status)
@@ -354,6 +367,10 @@ const SupervisorDailyTasks = ({ onToast = () => {} }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {proofViewer && (
+        <DocViewerModal file={proofViewer} onClose={() => setProofViewer(null)} />
       )}
 
       {excuseTarget && (

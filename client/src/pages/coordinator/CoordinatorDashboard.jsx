@@ -27,7 +27,7 @@ import useTransientToast from '../../hooks/useTransientToast';
 import CollapsibleSection from '../../components/common/CollapsibleSection';
 import WorkspacePane from '../../components/common/WorkspacePane';
 import SkeletonPage from '../../components/common/Skeleton';
-import SecuritySettings from '../../components/common/SecuritySettings';
+import PasswordChangeCard from '../../components/common/PasswordChangeCard';
 
 const AnalyticsPage = lazy(() => import('./AnalyticsPage'));
 const AttendanceExceptionsPage = lazy(() => import('../../components/common/AttendanceExceptionsPage'));
@@ -70,12 +70,12 @@ const [insightTab, setInsightTab] = useState('analytics');
   const [reportsOpen, setReportsOpen] = useState(false);
   const [deployStudentId, setDeployStudentId] = useState('');
   const [deploySignal, setDeploySignal] = useState(0);
-  const [studentQuery, setStudentQuery] = useState('');
   const [profile, setProfile] = useState(null);
   const [studentSection, setStudentSection] = useState('all');
   const reportsMenuRef = useRef(null);
   const [attendanceImage, setAttendanceImage] = useState(null);
   const [confirmImageDelete, setConfirmImageDelete] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const [imageDeleting, setImageDeleting] = useState(false);
 
   const fetchAll = useCallback(async () => {
@@ -233,20 +233,7 @@ const deployedStudents = students.filter(student => student.deployment_id);
 const undeployedStudents = students.filter(student => !student.deployment_id);
 // Simple two-view navigation: legacy 'all' resolves to whichever needs attention.
 const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'awaiting' ? 'awaiting' : (undeployedStudents.length ? 'awaiting' : 'deployed');
-  const filteredAwaitingStudents = useMemo(() => {
-    const query = studentQuery.trim().toLowerCase();
-    return undeployedStudents.filter(student => {
-      if (!query) return true;
-      return [
-        student.id,
-        student.student_id,
-        student.first_name,
-        student.last_name,
-        `${student.first_name || ''} ${student.last_name || ''}`,
-        student.email,
-      ].some(value => String(value || '').toLowerCase().includes(query));
-    });
-  }, [undeployedStudents, studentQuery]);
+  const filteredAwaitingStudents = useMemo(() => undeployedStudents, [undeployedStudents]);
   const averageProgress = deployedStudents.length
     ? deployedStudents.reduce((total, student) => total + safePercent(student.hours_rendered, student.required_hours), 0) / deployedStudents.length
     : 0;
@@ -542,7 +529,7 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
                 { label: 'School', value: profile?.school || user?.school || 'Not set' },
               ]}
             />
-            <SecuritySettings />
+            <PasswordChangeCard onToast={showToast} />
 
             <div className="card sup-acc-appear">
               <span>Appearance</span>
@@ -569,10 +556,18 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
             <button
               type="button"
               className="profile-signout"
-              onClick={async () => { await logout(); navigate('/login', { replace: true }); }}
+              onClick={() => setConfirmLogout(true)}
             >
               Sign out
             </button>
+            <ConfirmDialog
+              open={confirmLogout}
+              title="Sign out?"
+              message="Are you sure you want to sign out?"
+              confirmLabel="Sign out"
+              onCancel={() => setConfirmLogout(false)}
+              onConfirm={async () => { setConfirmLogout(false); await logout(); navigate('/login', { replace: true }); }}
+            />
           </div>
 
         ) : activeTab === 'settings' ? (
@@ -619,22 +614,6 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
               ))}
             </div>
 
-            <label className="dep-search">
-              <VectorIcon name="search" size={14} />
-              <input
-                type="search"
-                placeholder="Search students…"
-                value={studentQuery}
-                onChange={event => setStudentQuery(event.target.value)}
-                aria-label="Search students"
-              />
-              {studentQuery && (
-                <button type="button" onClick={() => setStudentQuery('')} aria-label="Clear search">
-                  <VectorIcon name="x" size={14} />
-                </button>
-              )}
-            </label>
-
             {view === 'awaiting' && (undeployedStudents.length > 0 ? (
               <section className="dep-await" aria-label="Awaiting assignment">
                 <p className="dep-await-title">Awaiting assignment · {filteredAwaitingStudents.length}</p>
@@ -667,7 +646,7 @@ const view = studentSection === 'deployed' ? 'deployed' : studentSection === 'aw
               <DeploymentsPage
                 showHeader={false}
                 hideSearch
-                searchQuery={studentQuery}
+                searchQuery=""
                 progressByStudent={progressByStudent}
                 prefillStudentId={deployStudentId}
                 createSignal={deploySignal}

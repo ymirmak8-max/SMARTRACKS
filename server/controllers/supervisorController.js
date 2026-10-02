@@ -387,6 +387,7 @@ export const getStudentActivity = async (req, res) => {
       await ensureDailyTaskTables();
       const tasksResult = await pool.query(
         `SELECT a.id, a.status, a.student_notes, a.completed_at, a.excuse_remarks, a.updated_at,
+                a.proof_image_url,
                 t.title, t.description, t.task_date::text AS task_date
          FROM daily_task_assignments a
          JOIN daily_task_templates t ON t.id = a.template_id
@@ -406,6 +407,23 @@ export const getStudentActivity = async (req, res) => {
       startDate: deployment.start_date, endDate: deployment.end_date,
     });
 
+    let documents = [];
+    try {
+      const documentsResult = await pool.query(
+        `SELECT dr.id, dr.name AS requirement_name, sd.id AS document_id,
+                sd.status, sd.file_url, sd.remarks
+         FROM document_requirements dr
+         LEFT JOIN student_documents sd
+           ON sd.requirement_id = dr.id AND sd.student_id = $1
+         WHERE dr.is_active = true OR sd.id IS NOT NULL
+         ORDER BY dr.sort_order ASC, dr.name ASC`,
+        [deployment.student_id]
+      );
+      documents = documentsResult.rows;
+    } catch (documentError) {
+      console.error('Load activity documents error:', documentError.message);
+    }
+
     return res.status(200).json({
       student: deployment,
       totals: {
@@ -420,6 +438,7 @@ export const getStudentActivity = async (req, res) => {
       missedDays,
       exceptions,
       tasks,
+      documents,
     });
   } catch (error) {
     console.error('Get student activity error:', error);
